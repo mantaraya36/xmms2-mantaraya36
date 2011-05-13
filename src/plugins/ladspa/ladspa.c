@@ -27,8 +27,7 @@ static gint xmms_ladspa_read (xmms_xform_t *xform, xmms_sample_t *buf, gint len,
 static gint64 xmms_ladspa_seek (xmms_xform_t *xform, gint64 offset,
                             xmms_xform_seek_mode_t whence, xmms_error_t *err);
 
-static void ladspa_process(float *buffer);
-
+static void ladspa_process (float *buffer);
 
 typedef struct xmms_ladspa_priv_St {
     gboolean enabled;
@@ -165,7 +164,7 @@ xmms_ladspa_read (xmms_xform_t *xform, xmms_sample_t *buf, gint len,
 	read = xmms_xform_read (xform, buf, len, error);
 	chan = xmms_xform_indata_get_int (xform, XMMS_STREAM_TYPE_FMT_CHANNELS);
 	if (read > 0 && priv->enabled) {
-		ladspa_process(read);
+		ladspa_process (read);
 	}
 
 	return read;
@@ -178,7 +177,7 @@ xmms_ladspa_seek (xmms_xform_t *xform, gint64 offset, xmms_xform_seek_mode_t whe
 }
 
 static void
-ladspa_process(float *buffer)
+ladspa_process (float *buffer)
 {
     /* TODO process buffer */
 }
