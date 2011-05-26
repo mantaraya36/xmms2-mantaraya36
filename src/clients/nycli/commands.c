@@ -49,6 +49,9 @@ struct browse_entry_St {
 	gint isdir;
 };
 
+static gboolean playlist_currpos_get (cli_infos_t *, gchar *, gint *);
+static gboolean playlist_length_get (cli_infos_t *, gchar *, gint *);
+
 /* Setup commands */
 
 #define CLI_SIMPLE_SETUP(name, cmd, req, usage, desc) \
@@ -68,6 +71,10 @@ CLI_SIMPLE_SETUP("toggle", cli_toggle, /* <<<<< */
                  COMMAND_REQ_CONNECTION | COMMAND_REQ_CACHE,
                  NULL,
                  _("Toggle playback."))
+CLI_SIMPLE_SETUP("stop", cli_stop,
+                 COMMAND_REQ_CONNECTION,
+                 NULL,
+                 _("Stop playback."))
 CLI_SIMPLE_SETUP("seek", cli_seek,
                  COMMAND_REQ_CONNECTION,
                  _("<time|offset>"),
@@ -160,7 +167,6 @@ CLI_SIMPLE_SETUP("server shutdown", cli_server_shutdown,
                  NULL,
                  _("Shutdown the server."))
 
-/* FIXME: Add all playlist commands */
 /* FIXME: macro for setup with flags (+ use ##x for f/f_setup?) */
 
 void
@@ -173,19 +179,6 @@ cli_help_setup (command_action_t *action)
 	command_action_fill (action, "help", &cli_help, COMMAND_REQ_NONE, flags,
 	                     _("[-a] [command]"),
 	                     _("List all commands, or help on one command."));
-}
-
-void
-cli_stop_setup (command_action_t *action)
-{
-	const argument_t flags[] = {
-		{ "tracks", 'n', 0, G_OPTION_ARG_INT, NULL, _("Number of tracks after which to stop playback."), "tracks" },
-		{ "time",   't', 0, G_OPTION_ARG_INT, NULL, _("Duration after which to stop playback."), "time" },
-		{ NULL }
-	};
-	command_action_fill (action, "stop", &cli_stop, COMMAND_REQ_CONNECTION, flags,
-	                     _("[-n <tracks> | -t <time>]"),
-	                     "Stop playback.");
 }
 
 void
@@ -320,7 +313,7 @@ cli_pl_sort_setup (command_action_t *action)
 		{ NULL }
 	};
 	command_action_fill (action, "playlist sort", &cli_pl_sort, COMMAND_REQ_CONNECTION | COMMAND_REQ_CACHE, flags,
-	                     _("[-p <playlist>] [prop1 [prop2 [...]]]"),
+	                     _("[-p <playlist>] [prop] ..."),
 	                     _("Sort a playlist by a list of properties.  By default, sort the active playlist.\n"
 						   "To sort by a property in reverse, prefix its name by a '-'."));
 }
@@ -376,7 +369,7 @@ cli_pl_list_setup (command_action_t *action)
 		{ NULL }
 	};
 	command_action_fill (action, "playlist list", &cli_pl_list, COMMAND_REQ_CONNECTION | COMMAND_REQ_CACHE, flags,
-	                     _("[-a] [pattern]"),
+	                     _("[-a]"),
 	                     _("List all playlists."));
 }
 
@@ -589,15 +582,6 @@ gboolean
 cli_stop (cli_infos_t *infos, command_context_t *ctx)
 {
 	xmmsc_result_t *res;
-	gint n;
-
-	/* FIXME: Support those flags */
-	if (command_flag_int_get (ctx, "tracks", &n) && n != 0) {
-		g_printf (_("--tracks flag not supported yet!\n"));
-	}
-	if (command_flag_int_get (ctx, "time", &n) && n != 0) {
-		g_printf (_("--time flag not supported yet!\n"));
-	}
 
 	res = xmmsc_playback_stop (infos->sync);
 	xmmsc_result_wait (res);
@@ -765,15 +749,14 @@ cli_list (cli_infos_t *infos, command_context_t *ctx)
 
 	/* Default to active playlist (from cache) */
 	command_flag_string_get (ctx, "playlist", &playlist);
-	if (!playlist
-	    || strcmp (playlist, infos->cache->active_playlist_name) == 0) {
-		/* FIXME: Optim by reading data from cache */
+
+	if (!playlist_currpos_get (infos, playlist, &pos)) {
+		g_printf (_("Error: failed to get current position in playlist.\n"));
+		return FALSE;
+	}
+
+	if (!playlist) {
 		playlist = XMMS_ACTIVE_PLAYLIST;
-		pos = infos->cache->currpos;
-	} else {
-		/* currpos is 1 for non-active playlists
-		   FIXME: always true? */
-		pos = 1;
 	}
 
 	/* Filter by positions */
@@ -2324,6 +2307,8 @@ cli_server_volume (cli_infos_t *infos, command_context_t *ctx)
 
 	gchar *channel;
 	gint volume;
+	gchar *volstr;
+	bool relative_vol;
 
 	if (!command_flag_string_get (ctx, "channel", &channel)) {
 		channel = NULL;
@@ -2334,7 +2319,14 @@ cli_server_volume (cli_infos_t *infos, command_context_t *ctx)
 		xmmsc_result_wait (res);
 		print_volume (res, infos, channel);
 	} else {
-		set_volume (infos, channel, volume);
+		if (command_arg_string_get (ctx, 0, &volstr)) {
+			relative_vol = (volstr[0] == '+') || volume < 0;
+		}
+		if (relative_vol) {
+			adjust_volume (infos, channel, volume);
+		} else {
+			set_volume (infos, channel, volume);
+		}
 	}
 
 	return TRUE;
@@ -2403,7 +2395,7 @@ static void
 help_list_commands (GList *names,
                     const gchar *sing, const gchar *plur, const gchar *det)
 {
-	g_printf (_("usage: nyxmms2 <%s> [args]\n\n"), sing);
+	g_printf (_("usage: xmms2 <%s> [args]\n\n"), sing);
 	g_printf (_("Available %s:\n"), plur);
 	g_list_foreach (cmdnames_find (names, NULL),
 	                help_short_command, NULL);
@@ -2416,7 +2408,7 @@ help_list_subcommands (GList *names, gchar *cmd,
                        const gchar *sing, const gchar *plur, const gchar *det)
 {
 	gchar **cmdv = g_strsplit (cmd, " ", 0);
-	g_printf (_("usage: nyxmms2 %s <sub%s> [args]\n\n"), cmd, sing);
+	g_printf (_("usage: xmms2 %s <sub%s> [args]\n\n"), cmd, sing);
 	g_printf (_("Available '%s' sub%s:\n"), cmd, plur);
 	g_list_foreach (cmdnames_find (names, cmdv),
 	                help_short_command, NULL);

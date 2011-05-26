@@ -64,15 +64,8 @@ command_run (cli_infos_t *infos, gchar *input)
 				command_run (infos, listop);
 			}
 		} else {
-			if (g_error_matches (error, G_SHELL_ERROR,
-			                     G_SHELL_ERROR_BAD_QUOTING)) {
-				g_printf (_("Error: Mismatched quote\n"));
-			} else if (g_error_matches (error, G_SHELL_ERROR,
-			                            G_SHELL_ERROR_FAILED)) {
-				g_printf (_("Error: Invalid input\n"));
-			}
+			g_printf (_("Error: %s\n"), error->message);
 			g_error_free (error);
-			/* FIXME: Handle errors */
 		}
 	}
 }
@@ -80,7 +73,12 @@ command_run (cli_infos_t *infos, gchar *input)
 static void
 command_argument_free (void *x)
 {
-	g_free (x);
+	command_argument_t *arg = (command_argument_t *)x;
+
+	if (arg->type == COMMAND_ARGUMENT_TYPE_STRING && arg->value.vstring) {
+		g_free (arg->value.vstring);
+	}
+	g_free (arg);
 }
 
 static command_context_t *
@@ -146,6 +144,9 @@ command_runnable (cli_infos_t *infos, command_action_t *action)
  * argument values.
  * Note: The lib doesn't like argv starting with a flag, so keep a
  * token before that to avoid problems.
+ *
+ * The passed argv should be an array of length argc+1. (So that a terminating
+ * NULL-pointer can be added in argv[argc].)
  */
 static command_context_t *
 init_context_from_args (argument_t *argdefs, gint argc, gchar **argv)
@@ -191,6 +192,7 @@ init_context_from_args (argument_t *argdefs, gint argc, gchar **argv)
 
 	context = g_option_context_new (NULL);
 	g_option_context_set_help_enabled (context, FALSE);  /* runs exit(0)! */
+	g_option_context_set_ignore_unknown_options (context, TRUE);
 	g_option_context_add_main_entries (context, argdefs, NULL);
 	g_option_context_parse (context, &ctx->argc, &ctx->argv, &error);
 	g_option_context_free (context);
@@ -202,20 +204,29 @@ init_context_from_args (argument_t *argdefs, gint argc, gchar **argv)
 		return NULL;
 	}
 
-	/* strip -- */
+	/* strip --, check for unknown options before it */
 	/* FIXME: We do not parse options elsewhere, do we? */
 	for (i = 0; i < ctx->argc; i++) {
 		if (strcmp (ctx->argv[i], "--") == 0) {
 			break;
 		}
+		if (ctx->argv[i][0] == '-' && ctx->argv[i][1] != '\0' &&
+		    !(ctx->argv[i][1] >= '0' && ctx->argv[i][1] <= '9')) {
+
+			g_printf (_("Error: Unknown option '%s'\n"), ctx->argv[i]);
+			command_context_free (ctx);
+			return NULL;
+		}
 	}
 	if (i != ctx->argc) {
-		for (i+1; i < ctx->argc; i++) {
+		for (i++; i < ctx->argc; i++) {
 			argv[i-1] = argv[i];
 		}
 		ctx->argc--;
 	}
 
+	/* Some functions rely on NULL-termination. */
+	ctx->argv[ctx->argc] = NULL;
 	return ctx;
 }
 
@@ -268,15 +279,15 @@ flag_dispatch (cli_infos_t *infos, gint in_argc, gchar **in_argv)
 			              CMD_TYPE_COMMAND);
 		} else {
 			/* FIXME: explain -h and -v flags here (reuse help_command code?) */
-			g_printf (_("usage: nyxmms2 [<command> [args]]\n\n"));
-			g_printf (_("NyCLI, the awesome command-line XMMS2 client from the future, "
+			g_printf (_("usage: xmms2 [<command> [args]]\n\n"));
+			g_printf (_("XMMS2 CLI, the awesome command-line XMMS2 client from the future, "
 			          "v" XMMS2_CLI_VERSION ".\n\n"));
 			g_printf (_("If given a command, runs it inline and exit.\n"));
 			g_printf (_("If not, enters a shell-like interface to execute commands.\n\n"));
 			g_printf (_("Type 'help <command>' for detailed help about a command.\n"));
 		}
 	} else if (command_flag_boolean_get (ctx, "version", &check) && check) {
-		g_printf (_("NyCLI version " XMMS2_CLI_VERSION "\n"));
+		g_printf (_("XMMS2 CLI version " XMMS2_CLI_VERSION "\n"));
 		g_printf (_("Copyright (C) 2008 XMMS2 Team\n"));
 		g_printf (_("This is free software; see the source for copying conditions.\n"));
 		g_printf (_("There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A\n"
@@ -299,15 +310,24 @@ command_dispatch (cli_infos_t *infos, gint in_argc, gchar **in_argv)
 	command_action_t *action;
 	command_trie_match_type_t match;
 	gint argc;
+	gchar *tmp_argv[in_argc+1];
 	gchar **argv;
 
 	gboolean auto_complete;
 
-	/* The arguments will be updated by command_trie_find. */
+	/* The arguments will be updated by command_trie_find and
+	 * init_context_from_args, so we make a copy. */
+	memcpy (tmp_argv, in_argv, in_argc * sizeof (gchar *));
+	tmp_argv[in_argc] = NULL;
+
 	argc = in_argc;
-	argv = in_argv;
+	argv = tmp_argv;
+
 	auto_complete = configuration_get_boolean (infos->config,
 	                                           "AUTO_UNIQUE_COMPLETE");
+
+	/* This updates argv and argc so that they start at the first non-command
+	 * token. */
 	match = command_trie_find (infos->commands, &argv, &argc,
 	                           auto_complete, &action, NULL);
 

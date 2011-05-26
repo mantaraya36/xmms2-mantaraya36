@@ -52,6 +52,9 @@ section_to_hash (GKeyFile *file, const gchar *section, GHashTable *hash)
 
 	keys = g_key_file_get_keys (file, section, NULL, &error);
 
+	/* Only asserts with broken hard coded configuration file. */
+	g_assert (error == NULL);
+
 	for (i = 0; keys[i] != NULL; i++) {
 		gchar *value;
 
@@ -138,6 +141,7 @@ configuration_load (const gchar *path)
 	if (!g_key_file_load_from_file (custom, path, G_KEY_FILE_NONE, &error)) {
 		g_printf ("Error: Couldn't load configuration file. (%s)\n",
 		          error->message);
+		g_error_free (error);
 	} else {
 		configuration_merge (keyfile, custom);
 	}

@@ -1,6 +1,6 @@
-.\" nycli - The New Korving CLI
+.\" xmms2 - The official XMMS2 command line interface
 .\"
-.\" nyxmms2.1 - The nycli man page
+.\" xmms2.1 - The xmms2 man page
 .\"
 .\" Copyright (C) 2009 Anthony Garcia
 .\"
@@ -26,25 +26,25 @@
 .\" THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-.TH NYXMMS2 1
+.TH XMMS2 1
 .SH NAME
-nycli \- New Korving CLI
+xmms2 \- The official XMMS2 command line interface
 .SH SYNOPSIS
-.B nyxmms2
+.B xmms2
 [command]
 [arguments]
 .SH DESCRIPTION
-.B nycli
+.B xmms2
 is the new official CLI XMMS2 client, replacing \fBxmms2\fR(1).
 .SH INVOCATION
 .SS INLINE MODE
 If
-.B nycli
+.B xmms2
 is passed a command as an argument, that command will be interpreted and
-.B nycli
+.B xmms2
 will exit after it is finished.
 .SS INTERACTIVE MODE
-.B nycli
+.B xmms2
 features a powerful shell-like environment via readline that allows the user to
 enter commands at a prompt and have the usual cool features such as pathname expansion
 and line editing.
@@ -360,25 +360,11 @@ Display command help.
 .PP
 
 .TP
-\fBsearch\fR [\-p <name>, \-c <name>] [\-o <prop1[,prop2...]>] [\-l <prop1[,prop2...]>] <pattern>
+\fBsearch\fR [\-o <prop1[,prop2...]>] [\-l <prop1[,prop2...]>] <pattern>
 .PP
 .RS 4
 Search and print all media matching the pattern. Search can be restricted
 to a collection or a playlist by using the corresponding flag.
-.RE
-.PP
-.RS 4
-\-p, \-\-playlist
-.RE
-.RS 8
-Search in the given playlist.
-.RE
-.PP
-.RS 4
-\-c, \-\-collection
-.RE
-.RS 8
-Search in the given collection.
 .RE
 .PP
 .RS 4
@@ -419,24 +405,10 @@ Display command help.
 .PP
 
 .TP
-\fBstop\fR [\-n <tracks>, \-t <time>]
+\fBstop\fR
 .PP
 .RS 4
 Stop playback.
-.RE
-.PP
-.RS 4
-\-n, \-\-tracks
-.RE
-.RS 8
-Number of tracks after which to stop playback.
-.RE
-.PP
-.RS 4
-\-t, \-\-time
-.RE
-.RS 8
-Duration after which to stop playback.
 .RE
 .PP
 .RS 4
@@ -495,7 +467,7 @@ Display command help.
 .PP
 
 .TP
-\fBplaylist config\fR [\-t <type>] [\-s <history>] [\-u <upcoming>] [\-i <coll>] [playlist]
+\fBplaylist config\fR [\-t <type>] [\-s <history>] [\-u <upcoming>] [\-i <coll>] [-j <playlist>] [playlist]
 .PP
 .RS 4
 Configure a playlist by changing its type, attributes, etc.
@@ -531,6 +503,13 @@ Input collection for the playlist (for pshuffle). Default to 'All Media'.
 .RE
 .PP
 .RS 4
+\-j, \-\-jumplist
+.RE
+.RS 8
+Jump to another playlist when the end of the playlist is reached.
+.RE
+.PP
+.RS 4
 \-h, \-\-help
 .RE
 .RS 8
@@ -561,7 +540,7 @@ Display command help.
 .PP
 
 .TP
-\fBplaylist list\fR [\-a] [pattern]
+\fBplaylist list\fR [\-a]
 .PP
 .RS 4
 List all playlists.
@@ -642,17 +621,11 @@ Display command help.
 .PP
 
 .TP
-\fBplaylist sort\fR [\-o <order>] [playlist]
+\fBplaylist sort\fR [\-p playlist] [prop] ...
 .PP
 .RS 4
-Sort a playlist.  By default, sort the active playlist.
-.RE
-.PP
-.RS 4
-\-o, \-\-order
-.RE
-.RS 8
-List of properties to sort by (prefix by '-' for reverse sorting).
+Sort a playlist. By default, sort the active playlist. Prefix properties by '-'
+for reverse sorting.
 .RE
 .PP
 .RS 4
@@ -660,6 +633,13 @@ List of properties to sort by (prefix by '-' for reverse sorting).
 .RE
 .RS 8
 Display command help.
+.RE
+.PP
+.RS 4
+\-p, \-\-playlist
+.RE
+.RS 8
+Rename the given playlist.
 .RE
 .PP
 
@@ -681,7 +661,7 @@ Display command help.
 .SH COLLECTION COMMANDS
 
 .TP
-\fBcollection\fR 
+\fBcollection\fR
 .PP
 .RS 4
 No description
@@ -1109,7 +1089,7 @@ Match a specific media library id.
 .PP
 A list of command aliases are read from the configuration file in the section [alias]
 at runtime. The syntax of
-.B nycli
+.B xmms2
 aliases are somewhat similar to bash and other shells. An alias is defined by a list of semi-colon separated
 commands and arguments. Parameter expansion is supported (see
 .B EXPANSION
@@ -1322,13 +1302,13 @@ String to use as a prompt in
 .PP
 SERVER_AUTOSTART
 .RS 4
-Boolean, if true nycli will attempt to start \fBxmms2d\fR(1) if it's not running already.
+Boolean, if true xmms2 will attempt to start \fBxmms2d\fR(1) if it's not running already.
 .RE
 .PP
 SHELL_START_MESSAGE
 .RS 4
 Boolean, if true,
-.B nycli
+.B xmms2
 will display a greeting message and basic help when started in
 .B INTERACTIVE MODE
 .RE
@@ -1349,7 +1329,7 @@ Default command history file if HISTORY_FILE is unset.
 $XDG_CONFIG_HOME/xmms2/clients/nycli.conf
 .RS 4
 The configuration file for
-.B nycli
+.B xmms2
 .RE
 .SH BUGS
 Please report all bugs at http://bugs.xmms2.xmms.se

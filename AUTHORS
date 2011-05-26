@@ -265,6 +265,10 @@ N: Lucas Adam M Paul
 E: reilithion@gmail.com
 D: GME plugin
 
+N: Timo Paulssen
+E: timonator@perpetuum-immobile.de
+D: minor nycli changes
+
 N: Daniel Pearson
 E: daniel@nanoo.org
 D: Python XMMSSync-proxy. PythonAPI fixes.
@@ -299,6 +303,10 @@ N: Ugo Riboni
 E: nerochiaro@neuros.us
 W: http://nerochiaro.net
 D: Neuros OSD support and related fixes.
+
+N: David Richards
+E: rawdod@gmail.com
+D: jack fixes, output
 
 N: Alexander Rigbo
 E: alex@rigbo.se
@@ -382,6 +390,7 @@ D: Various fixes
 
 N: Sergei Trofimovich
 E: slyich@gmail.com
+E: slyfox@gentoo.org
 E: slyfox@inbox.ru
 E: st@anti-virus.by
 D: Various Cleanups
