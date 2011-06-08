@@ -1,5 +1,5 @@
 /*  XMMS2 - X Music Multiplexer System
- *  Copyright (C) 2003-2007 XMMS2 Team
+ *  Copyright (C) 2003-2011 XMMS2 Team
  *
  *  PLUGINS ARE NOT CONSIDERED TO BE DERIVED WORK !!!
  *
@@ -14,20 +14,13 @@
  *  General Public License for more details.
  */
 
-#ifndef __STATUS_H__
-#define __STATUS_H__
+#ifndef __MATCHING_BROWSE_H_
+#define __MATCHING_BROWSE_H_
 
-#include "main.h"
+typedef struct browse_entry_St browse_entry_t;
 
-struct status_entry_St {
-	xmmsv_t *data;
-	gchar *format;
-	gint refresh;
-};
+void browse_entry_get (browse_entry_t *data, const gchar **url, gboolean *is_directory);
+void browse_entry_free (browse_entry_t *entry);
+GList *matching_browse (xmmsc_connection_t *conn, const gchar *path);
 
-status_entry_t *status_init (const gchar *format, gint refresh);
-void status_free (status_entry_t *entry);
-void status_update_all (cli_infos_t *infos, status_entry_t *entry);
-void status_print_entry (status_entry_t *entry);
-
-#endif /* __STATUS_H__ */
+#endif
