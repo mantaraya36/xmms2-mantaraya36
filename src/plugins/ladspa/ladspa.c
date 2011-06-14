@@ -46,6 +46,8 @@ struct ladspa_plugin_node_St {
 	LADSPA_Mode mode;
 	float balance; /* Used only for mode LADSPA_BALANCE */
 	LADSPA_Handle *instance;
+	guint num_ctl_in_ports;
+	guint num_ctl_out_ports;
 	LADSPA_Data *ctl_in_ports;
 	LADSPA_Data *ctl_out_ports;
 	gfloat **temp_bufs; /* all plugins have independent output buffers */
@@ -102,11 +104,6 @@ xmms_ladspa_plugin_setup (xmms_xform_plugin_t *xform_plugin)
 	                                            "amp.so",
 	                                            NULL, NULL);
 	xmms_xform_plugin_config_property_register (xform_plugin, "pluginname", "amp_stereo",
-	                                            NULL, NULL);
-	/* TODO remove this */
-	xmms_xform_plugin_config_property_register (xform_plugin, "parameter0", "0",
-	                                            NULL, NULL);
-	xmms_xform_plugin_config_property_register (xform_plugin, "parameter1", "0",
 	                                            NULL, NULL);
 
 	xmms_xform_plugin_indata_add (xform_plugin,
@@ -177,14 +174,6 @@ xmms_ladspa_init (xmms_xform_t *xform)
 	xmms_config_property_callback_set (config, ladspa_config_changed, priv);
 	pluginname = xmms_config_property_get_string (config);
 
-	config = xmms_xform_config_lookup (xform, "parameter0");
-	g_return_val_if_fail (config, FALSE);
-	xmms_config_property_callback_set (config, ladspa_config_changed, priv);
-
-	config = xmms_xform_config_lookup (xform, "parameter1");
-	g_return_val_if_fail (config, FALSE);
-	xmms_config_property_callback_set (config, ladspa_config_changed, priv);
-
 	ret = ladspa_init_plugin(priv, pluginlib, pluginname, srate);
 
 	return ret;
@@ -197,6 +186,7 @@ xmms_ladspa_destroy (xmms_xform_t *xform)
 	ladspa_data_t *priv;
 	ladspa_plugin_node_t *old_node;
 	ladspa_plugin_node_t *plugin_node;
+	gchar *property_name;
 	gint i;
 
 	g_return_if_fail (xform);
@@ -223,19 +213,33 @@ xmms_ladspa_destroy (xmms_xform_t *xform)
 				}
 				g_free(plugin_node->temp_bufs);
 			}
-			old_node = plugin_node;
-			plugin_node = plugin_node->next;
-			g_free (old_node);
 		}
+		g_free (plugin_node->ctl_in_ports);
+		g_free (plugin_node->ctl_out_ports);
+		old_node = plugin_node;
+		plugin_node = plugin_node->next;
+		g_free (old_node);
 	}
 
-	/* Free config options */
+	/* Free global config options */
 	config = xmms_xform_config_lookup (xform, "enabled");
 	xmms_config_property_callback_remove (config, ladspa_config_changed, priv);
 	config = xmms_xform_config_lookup (xform, "pluginlib");
 	xmms_config_property_callback_remove (config, ladspa_config_changed, priv);
 	config = xmms_xform_config_lookup (xform, "pluginname");
 	xmms_config_property_callback_remove (config, ladspa_config_changed, priv);
+
+	/* Free any remaining plugin config */
+	i = 0;
+	property_name = g_strdup_printf ("control.%i", i);;
+	config = xmms_xform_config_lookup (xform, property_name);
+	g_free (property_name);
+	while (config != NULL) {
+		/* xmms_config_property_destroy (config); */
+		/* property_name = g_strdup_printf ("controlname.%i", i);; */
+		/* config = xmms_xform_config_lookup (xform, property_name); */
+		/* xmms_config_property_destroy (config); */
+	}
 	g_free (priv);
 }
 
@@ -386,7 +390,6 @@ ladspa_config_changed (xmms_object_t *object, xmmsv_t *data, gpointer userdata)
 	name = xmms_config_property_get_name ((xmms_config_property_t *) object);
 	value = xmms_config_property_get_float ((xmms_config_property_t *) object);
 
-	xmms_log_info ("property %s", name);
 	/* TODO connect parameters properly */
 	/* TODO will only be active if xform chain is connected */
 	if (!g_ascii_strcasecmp (name, "ladspa.pluginlib")) {
@@ -394,13 +397,13 @@ ladspa_config_changed (xmms_object_t *object, xmmsv_t *data, gpointer userdata)
 		xmms_log_info ("ladspa.pluginlib change not supported!");
 	} else if (!g_ascii_strcasecmp (name, "ladspa.pluginname")) {
 		xmms_log_info ("ladspa.pluginname change not supported!");
-	} else if (!g_ascii_strcasecmp (name, "ladspa.parameter0")) {
-		xmms_log_info ("value was %f", priv->plugin_list->ctl_in_ports[0]);
-		priv->plugin_list->ctl_in_ports[0] = value;
-		xmms_log_info ("value set to %f", value);
-	} else if (!g_ascii_strcasecmp (name, "ladspa.parameter1")) {
-		priv->plugin_list->ctl_in_ports[1] = value;
+	} else if (g_str_has_prefix (name, "ladspa.control.") ) {
+		xmms_log_info ("Change control %lu", (gulong) g_ascii_strtoull (name+15, NULL, 10) );
+		/* xmms_log_info ("value was %f", priv->plugin_list->ctl_in_ports[0]); */
+		/* priv->plugin_list->ctl_in_ports[0] = value; */
+		/* xmms_log_info ("value set to %f", value); */
 	}
+	xmms_log_info ("Change control %lu", (gulong) g_ascii_strtoull (name+15, NULL, 10) );
 
 	/* TODO validate ladspa plugin parameters with:
 	   LADSPA_IS_HINT_BOUNDED_BELOW(x)
@@ -427,8 +430,8 @@ ladspa_load_lib (const gchar *pluginlib)
 	} else { /* relative path */
 		LADSPA_path = g_getenv ("LADSPA_PATH");
 		if (!LADSPA_path || strlen (LADSPA_path) == 0) {
-			paths = g_malloc(2 * sizeof(gchar *));
-			paths[0] = g_malloc((strlen(default_path) + 1) * sizeof(gchar));
+			paths = g_new(gchar *, 2);
+			paths[0] = g_new(gchar, (strlen(default_path) + 1) );
 			paths[1] = NULL;
 			strncpy(paths[0], default_path, strlen(default_path));
 		} else {
@@ -473,6 +476,9 @@ ladspa_init_plugin (ladspa_data_t *priv, const gchar *pluginlib,
 	const char * const * PortNames;
 	const LADSPA_PortRangeHint * PortRangeHints;
 	ladspa_plugin_node_t *node;
+	xmms_config_property_t *property;
+	gchar *default_value_str;
+	gchar * property_name;
 	void *dl;
 	guint out_count, in_count, ctl_in_port_count, ctl_out_port_count;
 	gulong index;
@@ -511,6 +517,8 @@ ladspa_init_plugin (ladspa_data_t *priv, const gchar *pluginlib,
 		descriptor = descriptor_function (index);
 		if (descriptor != NULL) {
 			plugin_count++;
+		} else {
+			break;
 		}
 	}
 	if (plugin_count == 1) {
@@ -539,14 +547,8 @@ ladspa_init_plugin (ladspa_data_t *priv, const gchar *pluginlib,
 	ctl_in_port_count = ctl_out_port_count = out_count = in_count = 0;
 	for (i = 0; i < descriptor->PortCount; i++) {
 		if (LADSPA_IS_PORT_CONTROL (PortDescriptors[i])) {
-			gchar default_value_str[128];
 			LADSPA_Data lower, upper, default_value;
 			LADSPA_PortRangeHintDescriptor range_hints;
-			if (LADSPA_IS_PORT_INPUT (PortDescriptors[i])) {
-				ctl_in_port_count++;
-			} else if (LADSPA_IS_PORT_OUTPUT (PortDescriptors[i])) {
-				ctl_out_port_count++;
-			}
 			xmms_log_info ("Port %i(Control)-%s",i, PortNames[i]);
 			lower = PortRangeHints[i].LowerBound;
 			upper = PortRangeHints[i].UpperBound;
@@ -584,17 +586,48 @@ ladspa_init_plugin (ladspa_data_t *priv, const gchar *pluginlib,
 						default_value =  lower * 0.75 + upper * 0.75;
 					}
 				}
-				sprintf (default_value_str, "%.6f", default_value);
+				if (LADSPA_IS_PORT_INPUT (PortDescriptors[i])) {
+					default_value_str = g_strdup_printf ("%.6f", default_value);
+					property_name = g_strdup_printf ("ladspa.control.%i",
+					                                 ctl_in_port_count, NULL);
+					property = xmms_config_property_register (property_name,
+					                                          default_value_str,
+					                                          ladspa_config_changed,
+					                                          priv);
+					xmms_config_property_callback_set (property, ladspa_config_changed, priv);
+					/* TODO release these config callbacks */
+					g_free (default_value_str);
+					g_free (property_name);
+					property_name = g_strdup_printf ("ladspa.controlname.%i",
+					                                 ctl_in_port_count, NULL);
+					property = xmms_config_property_register (property_name,
+					                                          PortNames[i],
+					                                          ladspa_config_changed,
+					                                          priv);
+					xmms_config_property_callback_set (property, ladspa_config_changed, priv);
+					/* TODO release these config callbacks */
+					g_free (property_name);
+					ctl_in_port_count++;
+				} else if (LADSPA_IS_PORT_OUTPUT (PortDescriptors[i])) {
+					default_value_str = g_strdup_printf ("%.6f", default_value);
+					property_name = g_strdup_printf ("ladspa.display.%i",
+					                                 ctl_out_port_count, NULL);
+					property = xmms_config_property_register (property_name,
+					                                          default_value_str,
+					                                          ladspa_config_changed,
+					                                          priv);
+					g_free (default_value_str);
+					g_free (property_name);
+					property_name = g_strdup_printf ("ladspa.displayname.%i",
+					                                 ctl_out_port_count, NULL);
+					property = xmms_config_property_register (property_name,
+					                                          PortNames[i],
+					                                          ladspa_config_changed,
+					                                          priv);
+					g_free (property_name);
+					ctl_out_port_count++;
+				}
 			}
-			/* TODO register plugin parameters as server configs, but how from here? */
-			/* xmms_xform_plugin_config_property_register ( */
-			/* 	(xmms_xform_plugin_t *) (xform->plugin), PortNames[i], */
-			/* 	"test", */
-			/* 	NULL, NULL);  /\* TODO set callback *\/ */
-			/* TODO register config proerties and pass the default values */
-			/* xmms_config_property_register (PortNames[i], */
-			/* 							   "test", */
-			/* 							   NULL, NULL); */
 		} else if (LADSPA_IS_PORT_AUDIO (PortDescriptors[i])) {
 			xmms_log_info ("Port %i (Audio)-%s",i, PortNames[i]);
 			if (LADSPA_IS_PORT_INPUT (PortDescriptors[i])) {
@@ -611,27 +644,28 @@ ladspa_init_plugin (ladspa_data_t *priv, const gchar *pluginlib,
 		node->instance = (LADSPA_Handle *) g_malloc (sizeof(LADSPA_Handle));
 		node->instance[0] = descriptor->instantiate (descriptor, srate);
 		node->num_instances = 1;
-		node->mode = LADSPA_DIRECT;
+		node->mode = LADSPA_DIRECT; /* LADSPA_DIRECT */
 	}
 	else if (in_count == 1 && out_count == 1) {
 		node->instance
-			= (LADSPA_Handle *) g_malloc (priv->num_channels *sizeof(LADSPA_Handle));
+			= (LADSPA_Handle *) g_new (LADSPA_Handle, priv->num_channels);
 		node->num_instances = priv->num_channels;
-		node->mode = LADSPA_MONO;
+		node->mode = LADSPA_MONO; /* LADSPA_MONO */
+		out_count = priv->num_channels; /* To force creation of temp_bufs */
 		for (i = 0; i < priv->num_channels; i++) {
 			node->instance[i] = descriptor->instantiate (descriptor, srate);
 		}
 	}
 	else if (in_count == 1 && out_count == 2 && priv->num_channels == 2) {
 		node->instance
-			= (LADSPA_Handle *) g_malloc (priv->num_channels * sizeof (LADSPA_Handle));
+			= (LADSPA_Handle *) g_new (LADSPA_Handle, priv->num_channels);;
 		node->num_instances = priv->num_channels;
-		node->mode = LADSPA_BALANCE;
+		node->mode = LADSPA_BALANCE; /* LADSPA_MONO */
 		for (i = 0; i < priv->num_channels; i++) {
 			node->instance[i] = descriptor->instantiate (descriptor, srate);
 		}
 	}
-	else {
+	else { /* LADSPA_OTHER */
 		gint nin, nout, n;
 		/* determine the minimum number of instances needed */
 		nin = (priv->num_channels > in_count ?
@@ -642,20 +676,22 @@ ladspa_init_plugin (ladspa_data_t *priv, const gchar *pluginlib,
 		node->num_instances = n;
 		node->mode = LADSPA_OTHER;
 		node->instance
-			= (LADSPA_Handle *) g_malloc (n * sizeof (LADSPA_Handle));
+			= (LADSPA_Handle *) g_new (LADSPA_Handle, n);
 		for (i = 0; i < n; i++) {
 			node->instance[i] = descriptor->instantiate (descriptor, srate);
 		}
 	}
 	node->ctl_in_ports
-		= (LADSPA_Data *) g_malloc (ctl_in_port_count * sizeof (LADSPA_Data));
+		= (LADSPA_Data *) g_new (LADSPA_Data, ctl_in_port_count);
+	node->num_ctl_in_ports = ctl_in_port_count;
 	node->ctl_out_ports
-		= (LADSPA_Data *) g_malloc (ctl_out_port_count * sizeof (LADSPA_Data));
+		= (LADSPA_Data *) g_new (LADSPA_Data, ctl_out_port_count);
+	node->num_ctl_out_ports = ctl_out_port_count;
 	node->temp_bufs
-		= (gfloat **) g_malloc (out_count * sizeof (gfloat*) );
+		= (gfloat **) g_new (gfloat *, out_count );
 	for (i = 0; i < out_count; i++) {
 		node->temp_bufs[i]
-			= (gfloat *) g_malloc (priv->buf_size * sizeof (float) );
+			= (gfloat *) g_new (gfloat *, priv->buf_size );
 	}
 	/* now connect the ports */
 	for (inst = 0; inst < node->num_instances; inst++) {
@@ -720,13 +756,13 @@ ladspa_allocate_buffers(ladspa_data_t *priv, gint num_channels, gint buf_size)
 		g_free (priv->out_bufs);
 	}
 	priv->in_bufs
-		= (gfloat **) g_malloc (num_channels * sizeof (gfloat*) );
+		= (gfloat **) g_new (gfloat*, num_channels);
 	priv->out_bufs
-		= (gfloat **) g_malloc (num_channels * sizeof (gfloat*) );
+		= (gfloat **) g_new (gfloat*, num_channels);
 	for (i = 0; i < num_channels; i++) {
 		priv->in_bufs[i]
-			= (gfloat *) g_malloc (buf_size * sizeof (float) );
+			= (gfloat *) g_new (gfloat, buf_size);
 		priv->out_bufs[i]
-			= (gfloat *) g_malloc (buf_size * sizeof (float) );
+			= (gfloat *) g_new (gfloat, buf_size);
 	}
 }
