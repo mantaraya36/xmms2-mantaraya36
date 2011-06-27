@@ -1,5 +1,5 @@
 /*  XMMS2 - X Music Multiplexer System
- *  Copyright (C) 2003-2009 XMMS2 Team
+ *  Copyright (C) 2003-2011 XMMS2 Team
  *
  *  PLUGINS ARE NOT CONSIDERED TO BE DERIVED WORK !!!
  *
@@ -304,7 +304,7 @@ CASE (test_coerce)
 
 	CU_ASSERT_EQUAL (XMMS_SAMPLE_FORMAT_S32,
 	                 xmms_stream_type_get_int (to, XMMS_STREAM_TYPE_FMT_FORMAT));
-	CU_ASSERT_EQUAL (-1,
+	CU_ASSERT_EQUAL (88200,
 	                 xmms_stream_type_get_int (to, XMMS_STREAM_TYPE_FMT_SAMPLERATE));
 	CU_ASSERT_EQUAL (2,
 	                 xmms_stream_type_get_int (to, XMMS_STREAM_TYPE_FMT_CHANNELS));

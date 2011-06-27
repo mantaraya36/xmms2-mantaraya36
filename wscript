@@ -1,7 +1,7 @@
 # encoding: utf-8
 #
 # WAF build scripts for XMMS2
-# Copyright (C) 2006-2009 XMMS2 Team
+# Copyright (C) 2006-2011 XMMS2 Team
 #
 
 import sys
@@ -340,6 +340,7 @@ def configure(conf):
 
     # Add some specific OSX things
     if Options.platform == 'darwin':
+        conf.check_tool("osx")
         conf.env["LINKFLAGS"] += ['-multiply_defined suppress']
         conf.env["explicit_install_name"] = True
     else:
