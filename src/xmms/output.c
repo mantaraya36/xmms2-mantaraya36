@@ -114,6 +114,8 @@ struct xmms_output_St {
 	xmms_medialib_entry_t current_entry;
 	guint toskip;
 
+	xmms_xform_object_t *xform_obj;
+
 	/* */
 	GThread *filler_thread;
 	GMutex *filler_mutex;
@@ -383,10 +385,9 @@ xmms_output_filler (void *arg)
 	g_mutex_lock (output->filler_mutex);
 	while (output->filler_state != FILLER_QUIT) {
 		if (output->filler_state == FILLER_STOP) {
-			if (chain) {
-				xmms_object_unref (chain);
-				chain = NULL;
-			}
+			xmms_xform_chain_cleanup (output->xform_obj);
+			xmms_object_unref (chain);
+			chain = NULL;
 			xmms_ringbuf_set_eos (output->filler_buffer, TRUE);
 			g_cond_wait (output->filler_state_cond, output->filler_mutex);
 			last_was_kill = FALSE;
@@ -394,6 +395,7 @@ xmms_output_filler (void *arg)
 		}
 		if (output->filler_state == FILLER_KILL) {
 			if (chain) {
+				xmms_xform_chain_cleanup (output->xform_obj);
 				xmms_object_unref (chain);
 				chain = NULL;
 				output->filler_state = FILLER_RUN;
@@ -446,7 +448,8 @@ xmms_output_filler (void *arg)
 				continue;
 			}
 
-			chain = xmms_xform_chain_setup (entry, output->format_list, FALSE);
+			chain = xmms_xform_chain_setup (output->xform_obj, entry,
+			                                output->format_list, FALSE);
 			if (!chain) {
 				session = xmms_medialib_begin_write ();
 				if (xmms_medialib_entry_property_get_int (session, entry, XMMS_MEDIALIB_ENTRY_PROPERTY_STATUS) == XMMS_MEDIALIB_ENTRY_STATUS_NEW) {
@@ -485,6 +488,7 @@ xmms_output_filler (void *arg)
 			continue;
 		}
 		g_mutex_unlock (output->filler_mutex);
+		chain = xmms_xform_refresh (output->xform_obj);
 
 		ret = xmms_xform_this_read (chain, buf, sizeof (buf), &err);
 
@@ -925,7 +929,8 @@ xmms_output_plugin_switch (xmms_output_t *output, xmms_output_plugin_t *new_plug
  * Allocate a new #xmms_output_t
  */
 xmms_output_t *
-xmms_output_new (xmms_output_plugin_t *plugin, xmms_playlist_t *playlist)
+xmms_output_new (xmms_output_plugin_t *plugin, xmms_playlist_t *playlist,
+                 xmms_object_t *xform)
 {
 	xmms_output_t *output;
 	xmms_config_property_t *prop;
@@ -938,6 +943,7 @@ xmms_output_new (xmms_output_plugin_t *plugin, xmms_playlist_t *playlist)
 	output = xmms_object_new (xmms_output_t, xmms_output_destroy);
 
 	output->playlist = playlist;
+	output->xform_obj = (xmms_xform_object_t *) xform;
 
 	output->status_mutex = g_mutex_new ();
 	output->playtime_mutex = g_mutex_new ();
