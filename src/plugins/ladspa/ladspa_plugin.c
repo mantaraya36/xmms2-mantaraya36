@@ -39,11 +39,11 @@ ladspa_plugin_get_descriptor_function (const gchar *pluginlib)
 	GModule *dl;
 	LADSPA_Descriptor_Function desc;
 	gboolean exists = FALSE;
-	gchar *libname;
+	gchar *libname = NULL;
 	const char * LADSPA_path;
 	gchar ** paths, **p;
 	gchar default_path[] = "/usr/lib/ladspa"; /* TODO set different for windows */
-	g_assert (pluginlib != NULL);
+
 	if (strlen (pluginlib) == 0) {
 		return NULL;
 	}
@@ -139,7 +139,7 @@ ladspa_plugin_get_descriptor (gchar *pluginlib, gchar *pluginname)
 ladspa_plugin_node_t *
 ladspa_plugin_new_node (const gchar *plugin, gint num_channels, guint buf_size, gint srate)
 {
-	guint out_count, in_count, ctl_in_port_count, ctl_out_port_count;
+	guint out_count, in_count, ctl_in_port_count;
 	ladspa_plugin_node_t *node;
 	const LADSPA_Descriptor *descriptor = NULL;
 	gchar *pluginlib, *pluginname;
@@ -174,9 +174,6 @@ ladspa_plugin_new_node (const gchar *plugin, gint num_channels, guint buf_size, 
 	ctl_in_port_count
 		= ladspa_plugin_num_ports (descriptor,
 		                           LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL);
-	ctl_out_port_count
-		= ladspa_plugin_num_ports (descriptor,
-		                           LADSPA_PORT_OUTPUT | LADSPA_PORT_CONTROL);
 	in_count
 		= ladspa_plugin_num_ports (descriptor,
 		                           LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO);
@@ -201,7 +198,6 @@ ladspa_plugin_new_node (const gchar *plugin, gint num_channels, guint buf_size, 
 		node->instance = g_new0 (LADSPA_Handle, num_channels);
 		node->num_instances = num_channels;
 		node->mode = LADSPA_MONO; /* LADSPA_MONO */
-		out_count = num_channels; /* for creation of right number of temp_bufs */
 		for (i = 0; i < num_channels; i++) {
 			node->instance[i] = descriptor->instantiate (descriptor, srate);
 		}
@@ -285,48 +281,53 @@ ladspa_plugin_free_node (ladspa_plugin_node_t *plugin_node)
 }
 
 LADSPA_Data
-ladspa_plugin_get_default_value (const LADSPA_PortRangeHint * PortRangeHints, gint port_num)
+ladspa_plugin_get_default_value (const LADSPA_PortRangeHint * port_range_hints, gint port_num)
 {
 	LADSPA_Data lower, upper, default_value;
 	LADSPA_PortRangeHintDescriptor range_hints;
 
-	lower = PortRangeHints[port_num].LowerBound;
-	upper = PortRangeHints[port_num].UpperBound;
-	range_hints = PortRangeHints[port_num].HintDescriptor;
+	range_hints = port_range_hints[port_num].HintDescriptor;
 	default_value = 0.0;
-	if (LADSPA_IS_HINT_HAS_DEFAULT (range_hints)) {
-		if (LADSPA_IS_HINT_DEFAULT_MINIMUM (range_hints)) {
-			default_value = lower;
-		} else if (LADSPA_IS_HINT_DEFAULT_MAXIMUM (range_hints)) {
-			default_value = upper;
-		} else if (LADSPA_IS_HINT_DEFAULT_0 (range_hints)) {
-			default_value = 0.0;
-		} else if (LADSPA_IS_HINT_DEFAULT_1 (range_hints)) {
-			default_value = 1.0;
-		} else if (LADSPA_IS_HINT_DEFAULT_100 (range_hints)) {
-			default_value = 100.0;
-		} else if (LADSPA_IS_HINT_DEFAULT_440 (range_hints)) {
-			default_value = 440.0;
-		} else if (LADSPA_IS_HINT_DEFAULT_LOW (range_hints)) {
-			if (LADSPA_IS_HINT_LOGARITHMIC (range_hints)) {
-				default_value = exp (log (lower) * 0.75 + log (upper) * 0.25);
-			} else {
-				default_value =  lower * 0.75 + upper * 0.25;
-			}
-		} else if (LADSPA_IS_HINT_DEFAULT_MIDDLE (range_hints)) {
-			if (LADSPA_IS_HINT_LOGARITHMIC (range_hints)) {
-				default_value = exp (log (lower) * 0.5 + log (upper) * 0.5);
-			} else {
-				default_value =  lower * 0.5 + upper * 0.5;
-			}
-		} else if (LADSPA_IS_HINT_DEFAULT_HIGH (range_hints)) {
-			if (LADSPA_IS_HINT_LOGARITHMIC (range_hints)) {
-				default_value = exp (log (lower) * 0.25 + log (upper) * 0.75);
-			} else {
-				default_value =  lower * 0.75 + upper * 0.75;
-			}
+
+	if (!LADSPA_IS_HINT_HAS_DEFAULT (range_hints)) {
+		return default_value;
+	}
+
+	lower = port_range_hints[port_num].LowerBound;
+	upper = port_range_hints[port_num].UpperBound;
+
+	if (LADSPA_IS_HINT_DEFAULT_MINIMUM (range_hints)) {
+		default_value = lower;
+	} else if (LADSPA_IS_HINT_DEFAULT_MAXIMUM (range_hints)) {
+		default_value = upper;
+	} else if (LADSPA_IS_HINT_DEFAULT_0 (range_hints)) {
+		default_value = 0.0;
+	} else if (LADSPA_IS_HINT_DEFAULT_1 (range_hints)) {
+		default_value = 1.0;
+	} else if (LADSPA_IS_HINT_DEFAULT_100 (range_hints)) {
+		default_value = 100.0;
+	} else if (LADSPA_IS_HINT_DEFAULT_440 (range_hints)) {
+		default_value = 440.0;
+	} else if (LADSPA_IS_HINT_DEFAULT_LOW (range_hints)) {
+		if (LADSPA_IS_HINT_LOGARITHMIC (range_hints)) {
+			default_value = exp (log (lower) * 0.75 + log (upper) * 0.25);
+		} else {
+			default_value =  lower * 0.75 + upper * 0.25;
+		}
+	} else if (LADSPA_IS_HINT_DEFAULT_MIDDLE (range_hints)) {
+		if (LADSPA_IS_HINT_LOGARITHMIC (range_hints)) {
+			default_value = exp (log (lower) * 0.5 + log (upper) * 0.5);
+		} else {
+			default_value =  lower * 0.5 + upper * 0.5;
+		}
+	} else if (LADSPA_IS_HINT_DEFAULT_HIGH (range_hints)) {
+		if (LADSPA_IS_HINT_LOGARITHMIC (range_hints)) {
+			default_value = exp (log (lower) * 0.25 + log (upper) * 0.75);
+		} else {
+			default_value =  lower * 0.75 + upper * 0.75;
 		}
 	}
+
 	return default_value;
 }
 
@@ -335,11 +336,11 @@ ladspa_plugin_num_ports (const LADSPA_Descriptor *descriptor,
                          LADSPA_PortDescriptor port_type)
 {
 	gint i, count = 0;
-	const LADSPA_PortDescriptor * PortDescriptors;
+	const LADSPA_PortDescriptor * port_descriptors;
 
-	PortDescriptors = descriptor->PortDescriptors;
+	port_descriptors = descriptor->PortDescriptors;
 	for (i = 0; i < descriptor->PortCount; i++) {
-		if (PortDescriptors[i] == port_type) {
+		if (port_descriptors[i] == port_type) {
 			count++;
 		}
 	}

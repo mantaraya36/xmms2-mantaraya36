@@ -58,6 +58,8 @@ void deinterleave (xmms_sample_t *buf, gfloat **in_bufs,
                    gint buf_size, gint chans, gint fmt);
 void interleave (gfloat **out_bufs, xmms_sample_t *buf,
                  gint buf_size, gint chans, gint fmt);
+void process_plugin_node (ladspa_plugin_node_t *plugin_node, ladspa_data_t *priv,
+                          gint buf_size);
 void clean_unused_control_properties (gint num_ctl_ports);
 void set_control_property (ladspa_data_t *priv, ladspa_plugin_node_t *node,
                            gint ctl_num,  const char* port_name,
@@ -273,6 +275,77 @@ interleave (gfloat **out_bufs, xmms_sample_t *buf,
 	}
 }
 
+void
+process_plugin_node (ladspa_plugin_node_t *plugin_node, ladspa_data_t *priv,
+                     gint buf_size)
+{
+	gint i, j, max_out;
+	/* all nodes must finish with their output on out_bufs */
+	switch (plugin_node->mode) {
+		case LADSPA_DIRECT:
+			plugin_node->plugin->run (plugin_node->instance[0], buf_size);
+			break;
+		case LADSPA_MONO:
+			g_assert (plugin_node->num_instances == priv->num_channels);
+			for (i = 0; i < plugin_node->num_instances; i++) {
+				plugin_node->plugin->run (plugin_node->instance[i], buf_size);
+			}
+			break;
+		case LADSPA_BALANCE:
+			g_assert (plugin_node->num_instances == 2 && priv->num_channels == 2 && plugin_node->num_out_channels == 2);
+			plugin_node->plugin->run (plugin_node->instance[0], buf_size);
+			for (j = 0; j < buf_size; j++) {
+				priv->out_bufs[0][j]
+					= (1 - plugin_node->balance) * plugin_node->temp_bufs[0][j];
+				priv->out_bufs[1][j]
+					= plugin_node->balance * plugin_node->temp_bufs[1][j];
+			}
+			plugin_node->plugin->run (plugin_node->instance[1], buf_size);
+			for (j = 0; j < buf_size; j++) {
+				priv->out_bufs[0][j]
+					+= plugin_node->balance * plugin_node->temp_bufs[0][j];
+				priv->out_bufs[1][j]
+					+= (1 - plugin_node->balance) * plugin_node->temp_bufs[1][j];
+			}
+			break;
+		case LADSPA_OTHER:
+			/* clear output buffers first since we are going to accumulate output there */
+			for (i = 0; i < plugin_node->num_out_channels; i++) {
+				/* would memset be better here? */
+				/* memset (out_bufs[i], 0, buf_size * sizeof (ladspa_data_t) ); */
+				for (j = 0; j < buf_size; j++) {
+					priv->out_bufs[i][j] = 0.0;
+				}
+			}
+			max_out = (plugin_node->num_instances > priv->num_channels ?
+			           plugin_node->num_instances : priv->num_channels);
+			for (i = 0; i < max_out; i++) {
+				g_assert (plugin_node->num_out_channels > 0);
+				plugin_node->plugin->run (plugin_node->instance[i], buf_size);
+				for (j = 0; j < buf_size; j++) {
+					priv->out_bufs[i % priv->num_channels][j]
+						+= plugin_node->temp_bufs[i % plugin_node->num_out_channels][j];
+				}
+			}
+			break;
+		case LADSPA_NONE:
+			for (i = 0; i < priv->num_channels; i++) {
+				for (j = 0; j < buf_size; j++) {
+					priv->out_bufs[i][j] = priv->in_bufs[i][j];
+				}
+			}
+			break;
+	}
+
+	if (plugin_node->next != NULL) { /* Copy output to input for next plugin */
+		for (i = 0; i < buf_size; i++) {
+			for (j = 0; j < plugin_node->num_out_channels; j++) {
+				priv->in_bufs[j][i] = priv->out_bufs[j][i];
+			}
+		}
+	}
+}
+
 static void
 xmms_ladspa_reallocate_buffers (ladspa_data_t *priv, gint new_size, gint new_chans)
 {
@@ -315,7 +388,6 @@ xmms_ladspa_read (xmms_xform_t *xform, xmms_sample_t *buf, gint len,
 	gint chans;
 	gint fmt;
 	gint buf_size;
-	gint i, j, max_out;
 	ladspa_plugin_node_t *plugin_node;
 	g_return_val_if_fail (xform, -1);
 
@@ -339,68 +411,7 @@ xmms_ladspa_read (xmms_xform_t *xform, xmms_sample_t *buf, gint len,
 	deinterleave (buf, priv->in_bufs, buf_size, chans, fmt);
 
 	while (plugin_node != NULL) {
-		/* all nodes must finish with their output on out_bufs */
-		switch (plugin_node->mode) {
-			case LADSPA_DIRECT:
-				plugin_node->plugin->run (plugin_node->instance[0], buf_size);
-				break;
-			case LADSPA_MONO:
-				g_assert (plugin_node->num_instances == priv->num_channels);
-				for (i = 0; i < plugin_node->num_instances; i++) {
-					plugin_node->plugin->run (plugin_node->instance[i], buf_size);
-				}
-				break;
-			case LADSPA_BALANCE:
-				g_assert (plugin_node->num_instances == 2 && priv->num_channels == 2 && plugin_node->num_out_channels == 2);
-				plugin_node->plugin->run (plugin_node->instance[0], buf_size);
-				for (j = 0; j < buf_size; j++) {
-					priv->out_bufs[0][j]
-						= (1 - plugin_node->balance) * plugin_node->temp_bufs[0][j];
-					priv->out_bufs[1][j]
-						= plugin_node->balance * plugin_node->temp_bufs[1][j];
-				}
-				plugin_node->plugin->run (plugin_node->instance[1], buf_size);
-				for (j = 0; j < buf_size; j++) {
-					priv->out_bufs[0][j]
-						+= plugin_node->balance * plugin_node->temp_bufs[0][j];
-					priv->out_bufs[1][j]
-						+= (1 - plugin_node->balance) * plugin_node->temp_bufs[1][j];
-				}
-				break;
-			case LADSPA_OTHER:
-				/* clear output buffers first since we are going to accumulate output there */
-				for (i = 0; i < plugin_node->num_out_channels; i++) {
-					/* would memset be better here? */
-					/* memset (out_bufs[i], 0, buf_size * sizeof (ladspa_data_t) ); */
-					for (j = 0; j < buf_size; j++) {
-						priv->out_bufs[i][j] = 0.0;
-					}
-				}
-				max_out = (plugin_node->num_instances > priv->num_channels ?
-				           plugin_node->num_instances : priv->num_channels);
-				for (i = 0; i < max_out; i++) {
-					plugin_node->plugin->run (plugin_node->instance[i], buf_size);
-					for (j = 0; j < buf_size; j++) {
-						priv->out_bufs[i % priv->num_channels][j]
-							+= plugin_node->temp_bufs[i % plugin_node->num_out_channels][j];
-					}
-				}
-				break;
-			case LADSPA_NONE:
-				for (i = 0; i < priv->num_channels; i++) {
-					for (j = 0; j < buf_size; j++) {
-						priv->out_bufs[i][j] = priv->in_bufs[i][j];
-					}
-				}
-				break;
-		}
-		if (plugin_node->next != NULL) { /* Copy output to input for next plugin */
-			for (i = 0; i < buf_size; i++) {
-				for (j = 0; j < plugin_node->num_out_channels; j++) {
-					priv->in_bufs[j][i] = priv->out_bufs[j][i];
-				}
-			}
-		}
+		process_plugin_node (plugin_node, priv, buf_size);
 		plugin_node = plugin_node->next;
 	}
 	interleave (priv->out_bufs, buf, buf_size, chans, fmt);
@@ -452,7 +463,6 @@ ladspa_config_changed (xmms_object_t *object, xmmsv_t *data, gpointer userdata)
 
 	if (!g_ascii_strcasecmp (name, "ladspa.plugin")) {
 		node = ladspa_plugin_new_node (str_value, priv->num_channels, priv->buf_size, priv->srate);
-		g_assert (node != NULL);
 
 		g_mutex_lock (priv->mutex);
 
