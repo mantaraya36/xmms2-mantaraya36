@@ -42,6 +42,7 @@ typedef enum {
 	XMMSV_TYPE_LIST,
 	XMMSV_TYPE_DICT,
 	XMMSV_TYPE_BITBUFFER,
+	XMMSV_TYPE_FLOAT,
 	XMMSV_TYPE_END
 } xmmsv_type_t;
 
@@ -50,6 +51,7 @@ typedef struct xmmsv_St xmmsv_t;
 xmmsv_t *xmmsv_new_none (void);
 xmmsv_t *xmmsv_new_error (const char *errstr); /* FIXME: err id? */
 xmmsv_t *xmmsv_new_int (int32_t i);
+xmmsv_t *xmmsv_new_float (float i);
 xmmsv_t *xmmsv_new_string (const char *s);
 xmmsv_t *xmmsv_new_coll (xmmsv_coll_t *coll);
 xmmsv_t *xmmsv_new_bin (const unsigned char *data, unsigned int len);
@@ -64,6 +66,7 @@ int xmmsv_is_type (const xmmsv_t *val, xmmsv_type_t t);
 
 int xmmsv_get_error (const xmmsv_t *val, const char **r);
 int xmmsv_get_int (const xmmsv_t *val, int32_t *r);
+int xmmsv_get_float (const xmmsv_t *val, float *r);
 int xmmsv_get_string (const xmmsv_t *val, const char **r);
 int xmmsv_get_coll (const xmmsv_t *val, xmmsv_coll_t **coll);
 int xmmsv_get_bin (const xmmsv_t *val, const unsigned char **r, unsigned int *rlen);

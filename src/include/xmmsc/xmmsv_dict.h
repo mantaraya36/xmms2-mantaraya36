@@ -40,10 +40,12 @@ int xmmsv_dict_has_key (xmmsv_t *dictv, const char *key);
 
 int xmmsv_dict_entry_get_string (xmmsv_t *val, const char *key, const char **r);
 int xmmsv_dict_entry_get_int (xmmsv_t *val, const char *key, int32_t *r);
+int xmmsv_dict_entry_get_float (xmmsv_t *val, const char *key, float *r);
 int xmmsv_dict_entry_get_coll (xmmsv_t *val, const char *key, xmmsv_coll_t **coll);
 
 int xmmsv_dict_set_string (xmmsv_t *val, const char *key, const char *el);
 int xmmsv_dict_set_int (xmmsv_t *val, const char *key, int32_t el);
+int xmmsv_dict_set_float (xmmsv_t *val, const char *key, float el);
 int xmmsv_dict_set_coll (xmmsv_t *val, const char *key, xmmsv_coll_t *el);
 
 /* Utility */
@@ -71,10 +73,12 @@ int  xmmsv_dict_iter_remove (xmmsv_dict_iter_t *it);
 
 int xmmsv_dict_iter_pair_string (xmmsv_dict_iter_t *it, const char **key, const char **r);
 int xmmsv_dict_iter_pair_int (xmmsv_dict_iter_t *it, const char **key, int32_t *r);
+int xmmsv_dict_iter_pair_float (xmmsv_dict_iter_t *it, const char **key, float *r);
 int xmmsv_dict_iter_pair_coll (xmmsv_dict_iter_t *it, const char **key, xmmsv_coll_t **r);
 
 int xmmsv_dict_iter_set_string (xmmsv_dict_iter_t *it, const char *elem);
 int xmmsv_dict_iter_set_int (xmmsv_dict_iter_t *it, int32_t elem);
+int xmmsv_dict_iter_set_float (xmmsv_dict_iter_t *it, float elem);
 int xmmsv_dict_iter_set_coll (xmmsv_dict_iter_t *it, xmmsv_coll_t *elem);
 /** @} */
 

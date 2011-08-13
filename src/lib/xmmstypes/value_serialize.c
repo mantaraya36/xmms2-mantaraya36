@@ -24,6 +24,7 @@
 static bool _internal_put_on_bb_bin (xmmsv_t *bb, const unsigned char *data, unsigned int len);
 static bool _internal_put_on_bb_error (xmmsv_t *bb, const char *errmsg);
 static bool _internal_put_on_bb_int32 (xmmsv_t *bb, int32_t v);
+static bool _internal_put_on_bb_float (xmmsv_t *bb, float v);
 static bool _internal_put_on_bb_string (xmmsv_t *bb, const char *str);
 static bool _internal_put_on_bb_collection (xmmsv_t *bb, xmmsv_coll_t *coll);
 static bool _internal_put_on_bb_value_list (xmmsv_t *bb, xmmsv_t *v);
@@ -31,6 +32,7 @@ static bool _internal_put_on_bb_value_dict (xmmsv_t *bb, xmmsv_t *v);
 
 static bool _internal_get_from_bb_error_alloc (xmmsv_t *bb, char **buf, unsigned int *len);
 static bool _internal_get_from_bb_int32 (xmmsv_t *bb, int32_t *v);
+static bool _internal_get_from_bb_float (xmmsv_t *bb, float *v);
 static bool _internal_get_from_bb_int32_positive (xmmsv_t *bb, int32_t *v);
 static bool _internal_get_from_bb_string_alloc (xmmsv_t *bb, char **buf, unsigned int *len);
 static bool _internal_get_from_bb_collection_alloc (xmmsv_t *bb, xmmsv_coll_t **coll);
@@ -92,6 +94,12 @@ static bool
 _internal_put_on_bb_int32 (xmmsv_t *bb, int32_t v)
 {
 	return xmmsv_bitbuffer_put_bits (bb, 32, v);
+}
+
+static bool
+_internal_put_on_bb_float (xmmsv_t *bb, float v)
+{
+	return xmmsv_bitbuffer_put_float (bb, v);
 }
 
 static bool
@@ -267,6 +275,12 @@ static bool
 _internal_get_from_bb_int32 (xmmsv_t *bb, int32_t *v)
 {
 	return xmmsv_bitbuffer_get_bits (bb, 32, v);
+}
+
+static bool
+_internal_get_from_bb_float (xmmsv_t *bb, float *v)
+{
+	return xmmsv_bitbuffer_get_float (bb, v);
 }
 
 static bool
@@ -503,6 +517,7 @@ _internal_get_from_bb_value_of_type_alloc (xmmsv_t *bb, xmmsv_type_t type,
                                            xmmsv_t **val)
 {
 	int32_t i;
+	float f;
 	uint32_t len;
 	char *s;
 	xmmsv_coll_t *c;
@@ -521,6 +536,12 @@ _internal_get_from_bb_value_of_type_alloc (xmmsv_t *bb, xmmsv_type_t type,
 				return false;
 			}
 			*val = xmmsv_new_int (i);
+			break;
+		case XMMSV_TYPE_FLOAT:
+			if (!_internal_get_from_bb_float (bb, &f)) {
+				return false;
+			}
+			*val = xmmsv_new_float (f);
 			break;
 		case XMMSV_TYPE_STRING:
 			if (!_internal_get_from_bb_string_alloc (bb, &s, &len)) {
@@ -575,6 +596,7 @@ xmmsv_bitbuffer_serialize_value (xmmsv_t *bb, xmmsv_t *v)
 {
 	bool ret;
 	int32_t i;
+	float f;
 	const char *s;
 	xmmsv_coll_t *c;
 	const unsigned char *bc;
@@ -598,6 +620,12 @@ xmmsv_bitbuffer_serialize_value (xmmsv_t *bb, xmmsv_t *v)
 			return false;
 		}
 		ret = _internal_put_on_bb_int32 (bb, i);
+		break;
+	case XMMSV_TYPE_FLOAT:
+		if (!xmmsv_get_float (v, &f)) {
+			return false;
+		}
+		ret = _internal_put_on_bb_float (bb, f);
 		break;
 	case XMMSV_TYPE_STRING:
 		if (!xmmsv_get_string (v, &s)) {

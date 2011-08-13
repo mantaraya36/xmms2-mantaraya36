@@ -95,6 +95,7 @@ struct xmmsv_St {
 	union {
 		char *error;
 		int32_t int32;
+		float flt32;
 		char *string;
 		xmmsv_coll_t *coll;
 		xmmsv_bin_t bin;
@@ -169,6 +170,24 @@ xmmsv_new_int (int32_t i)
 
 	if (val) {
 		val->value.int32 = i;
+	}
+
+	return val;
+}
+
+/**
+ * Allocates a new float #xmmsv_t.
+ * @param i The value to store in the #xmmsv_t.
+ * @return The new #xmmsv_t. Must be unreferenced with
+ * #xmmsv_unref.
+ */
+xmmsv_t *
+xmmsv_new_float (float i)
+{
+	xmmsv_t *val = xmmsv_new (XMMSV_TYPE_FLOAT);
+
+	if (val) {
+		val->value.flt32 = i;
 	}
 
 	return val;
@@ -350,6 +369,7 @@ xmmsv_free (xmmsv_t *val)
 		case XMMSV_TYPE_NONE :
 		case XMMSV_TYPE_END :
 		case XMMSV_TYPE_INT32 :
+		case XMMSV_TYPE_FLOAT :
 			break;
 		case XMMSV_TYPE_ERROR :
 			free (val->value.error);
@@ -428,6 +448,7 @@ xmmsv_copy (xmmsv_t *val)
 	xmmsv_t *cur_val = NULL;
 	xmmsv_type_t type;
 	int32_t i;
+	float f;
 	const char *s;
 
 	x_return_val_if_fail (val, 0);
@@ -442,6 +463,10 @@ xmmsv_copy (xmmsv_t *val)
 	case XMMSV_TYPE_INT32:
 		xmmsv_get_int (val, &i);
 		cur_val = xmmsv_new_int (i);
+		break;
+	case XMMSV_TYPE_FLOAT:
+		xmmsv_get_float (val, &f);
+		cur_val = xmmsv_new_float (f);
 		break;
 	case XMMSV_TYPE_STRING:
 		xmmsv_get_string (val, &s);
@@ -697,6 +722,7 @@ xmmsv_dict_entry_get_type (xmmsv_t *val, const char *key)
 
 GEN_DICT_EXTRACTOR_FUNC (string, const char *)
 GEN_DICT_EXTRACTOR_FUNC (int, int32_t)
+GEN_DICT_EXTRACTOR_FUNC (float, float)
 GEN_DICT_EXTRACTOR_FUNC (coll, xmmsv_coll_t *)
 
 /* macro-magically define dict set functions */
@@ -716,6 +742,7 @@ GEN_DICT_EXTRACTOR_FUNC (coll, xmmsv_coll_t *)
 
 GEN_DICT_SET_FUNC (string, const char *)
 GEN_DICT_SET_FUNC (int, int32_t)
+GEN_DICT_SET_FUNC (float, float)
 GEN_DICT_SET_FUNC (coll, xmmsv_coll_t *)
 
 /* macro-magically define dict_iter extractors */
@@ -738,6 +765,7 @@ GEN_DICT_SET_FUNC (coll, xmmsv_coll_t *)
 
 GEN_DICT_ITER_EXTRACTOR_FUNC (string, const char *)
 GEN_DICT_ITER_EXTRACTOR_FUNC (int, int32_t)
+GEN_DICT_ITER_EXTRACTOR_FUNC (float, float)
 GEN_DICT_ITER_EXTRACTOR_FUNC (coll, xmmsv_coll_t *)
 
 /* macro-magically define dict_iter set functions */
@@ -757,6 +785,7 @@ GEN_DICT_ITER_EXTRACTOR_FUNC (coll, xmmsv_coll_t *)
 
 GEN_DICT_ITER_SET_FUNC (string, const char *)
 GEN_DICT_ITER_SET_FUNC (int, int32_t)
+GEN_DICT_ITER_SET_FUNC (float, float)
 GEN_DICT_ITER_SET_FUNC (coll, xmmsv_coll_t *)
 
 /* macro-magically define list extractors */
@@ -773,6 +802,7 @@ GEN_DICT_ITER_SET_FUNC (coll, xmmsv_coll_t *)
 
 GEN_LIST_EXTRACTOR_FUNC (string, const char *)
 GEN_LIST_EXTRACTOR_FUNC (int, int32_t)
+GEN_LIST_EXTRACTOR_FUNC (float, float)
 GEN_LIST_EXTRACTOR_FUNC (coll, xmmsv_coll_t *)
 
 /* macro-magically define list set functions */
@@ -792,6 +822,7 @@ GEN_LIST_EXTRACTOR_FUNC (coll, xmmsv_coll_t *)
 
 GEN_LIST_SET_FUNC (string, const char *)
 GEN_LIST_SET_FUNC (int, int32_t)
+GEN_LIST_SET_FUNC (float, float)
 GEN_LIST_SET_FUNC (coll, xmmsv_coll_t *)
 
 /* macro-magically define list insert functions */
@@ -811,6 +842,7 @@ GEN_LIST_SET_FUNC (coll, xmmsv_coll_t *)
 
 GEN_LIST_INSERT_FUNC (string, const char *)
 GEN_LIST_INSERT_FUNC (int, int32_t)
+GEN_LIST_INSERT_FUNC (float, float)
 GEN_LIST_INSERT_FUNC (coll, xmmsv_coll_t *)
 
 /* macro-magically define list append functions */
@@ -830,6 +862,7 @@ GEN_LIST_INSERT_FUNC (coll, xmmsv_coll_t *)
 
 GEN_LIST_APPEND_FUNC (string, const char *)
 GEN_LIST_APPEND_FUNC (int, int32_t)
+GEN_LIST_APPEND_FUNC (float, float)
 GEN_LIST_APPEND_FUNC (coll, xmmsv_coll_t *)
 
 /* macro-magically define list_iter extractors */
@@ -846,6 +879,7 @@ GEN_LIST_APPEND_FUNC (coll, xmmsv_coll_t *)
 
 GEN_LIST_ITER_EXTRACTOR_FUNC (string, const char *)
 GEN_LIST_ITER_EXTRACTOR_FUNC (int, int32_t)
+GEN_LIST_ITER_EXTRACTOR_FUNC (float, float)
 GEN_LIST_ITER_EXTRACTOR_FUNC (coll, xmmsv_coll_t *)
 
 /* macro-magically define list_iter insert functions */
@@ -865,6 +899,7 @@ GEN_LIST_ITER_EXTRACTOR_FUNC (coll, xmmsv_coll_t *)
 
 GEN_LIST_ITER_INSERT_FUNC (string, const char *)
 GEN_LIST_ITER_INSERT_FUNC (int, int32_t)
+GEN_LIST_ITER_INSERT_FUNC (float, float)
 GEN_LIST_ITER_INSERT_FUNC (coll, xmmsv_coll_t *)
 
 static int
@@ -992,6 +1027,25 @@ xmmsv_get_int (const xmmsv_t *val, int32_t *r)
 	}
 
 	*r = val->value.int32;
+
+	return 1;
+}
+
+/**
+ * Retrieves a float from the value.
+ *
+ * @param val a #xmmsv_t containing a float value.
+ * @param r the return float.
+ * @return 1 upon success otherwise 0
+ */
+int
+xmmsv_get_float (const xmmsv_t *val, float *r)
+{
+	if (!val || val->type != XMMSV_TYPE_FLOAT) {
+		return 0;
+	}
+
+	*r = val->value.flt32;
 
 	return 1;
 }
@@ -2547,7 +2601,7 @@ xmmsv_dict_format (char *target, int len, const char *fmt, xmmsv_t *val)
 			}
 		} else {
 			const char *result = NULL;
-			char tmp[17];
+			char tmp[12];
 
 			if (xmmsv_dict_iter_find (it, key)) {
 				xmmsv_dict_iter_pair (it, NULL, &v);
@@ -2564,6 +2618,11 @@ xmmsv_dict_format (char *target, int len, const char *fmt, xmmsv_t *val)
 					int32_t i;
 					xmmsv_get_int (v, &i);
 					snprintf (tmp, 12, "%d", i);
+					result = tmp;
+				} else if (type == XMMSV_TYPE_FLOAT) {
+					float f;
+					xmmsv_get_float (v, &f);
+					snprintf (tmp, 12, "%.6f", f);
 					result = tmp;
 				}
 			}
@@ -2715,6 +2774,27 @@ xmmsv_bitbuffer_get_bits (xmmsv_t *v, int bits, int *res)
 }
 
 int
+xmmsv_bitbuffer_get_float (xmmsv_t *v, float *f)
+{
+	uint32_t ret;
+	double mant;
+	int32_t mant_int, expon;
+
+	if (!xmmsv_bitbuffer_get_bits (v, 32, &mant_int)) {
+		return 0;
+	}
+	ret = xmmsv_bitbuffer_get_bits (v, 32, &expon);
+
+	if (mant_int > 0.0) {
+		mant = mant_int /(double) INT32_MAX;
+	} else {
+		mant = mant_int / fabs (INT32_MIN);
+	}
+	*f = ldexp (mant, expon);
+	return ret;
+}
+
+int
 xmmsv_bitbuffer_get_data (xmmsv_t *v, unsigned char *b, int len)
 {
 	while (len) {
@@ -2781,6 +2861,24 @@ xmmsv_bitbuffer_put_bits_at (xmmsv_t *v, int bits, int d, int offset)
 	if (!xmmsv_bitbuffer_put_bits (v, bits, d))
 		return 0;
 	return xmmsv_bitbuffer_goto (v, prevpos);
+}
+
+int
+xmmsv_bitbuffer_put_float (xmmsv_t *v, float f)
+{
+	double mant;
+	int32_t mant_int, expon;
+
+	mant = frexp (f, &expon);
+	if (mant > 0.0) {
+		mant_int = mant * INT32_MAX;
+	} else {
+		mant_int = mant * fabs (INT32_MIN);
+	}
+	if (!xmmsv_bitbuffer_put_bits (v, 32, mant_int)) {
+		return 0;
+	}
+	return xmmsv_bitbuffer_put_bits (v, 32, expon);
 }
 
 int
