@@ -220,7 +220,8 @@ _internal_put_on_bb_value_dict (xmmsv_t *bb, xmmsv_t *v)
 	xmmsv_dict_iter_t *it;
 	const char *key;
 	xmmsv_t *entry;
-	uint32_t ret, offset, count;
+	bool ret = false;
+	uint32_t offset, count;
 
 	if (!xmmsv_get_dict_iter (v, &it)) {
 		return false;

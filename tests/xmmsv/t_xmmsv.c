@@ -131,8 +131,8 @@ CASE (test_xmmsv_type_coll_wrong_type)
 
 CASE (test_xmmsv_type_bin)
 {
-	const unsigned char *b;
-	unsigned char *a = "look behind you! a three headed monkey!";
+	const char *b;
+	const char *a = "look behind you! a three headed monkey!";
 	unsigned int b_len, a_len = strlen (a) + 1;
 	xmmsv_t *value;
 
