@@ -106,7 +106,7 @@ static gboolean
 xmms_id3v1_parse (xmms_xform_t *xform, guchar *buf)
 {
 	xmms_config_property_t *config;
-	const char *encoding;
+	gchar *encoding;
 	const gchar *metakey;
 	xmmsv_t *bb;
 	unsigned char data[32];
@@ -166,7 +166,7 @@ xmms_id3v1_parse (xmms_xform_t *xform, guchar *buf)
 		xmms_xform_metadata_set_str (xform, metakey, id3_genres[data[0]]);
 	}
 
-
+	g_free (encoding);
 	xmmsv_unref (bb);
 	return TRUE;
 }

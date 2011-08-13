@@ -1,6 +1,7 @@
 
 types_suite=["xmmsv/t_xmmsv.c", 'xmmsv/t_xmmsv_serialization.c', "xmmsv/t_coll.c"]
-server_suite=["server/t_streamtype.c"]
+server_suite=["server/t_streamtype.c", "server/t_config.c"]
+
 
 def configure(conf):
     conf.check_cc(header_name="CUnit/CUnit.h", mandatory=True)
@@ -14,8 +15,15 @@ def configure(conf):
     conf.check_cc(fragment=code, type="cc", msg="Checking for constructor attribute", mandatory=True)
 
     conf.check_cfg(package='valgrind', uselib_store='valgrind', args='--cflags')
+    conf.env['CXXFLAGS'] += ['-I../_build_/default/src/xmms']
 
 def build(bld):
+    bld.new_task_gen(
+        source=['../src/ipc.xml', '../src/xmms/config_ipc.py'],
+        target="config_ipc.c",
+        rule='${PYTHON} ${SRC[1].abspath()} > ${TGT}',
+        before='cc')
+
     obj = bld.new_task_gen('cc', 'program')
     obj.target = "test_xmmstypes"
     obj.source = ['runner/main.c', 'runner/valgrind.c'] + types_suite
@@ -26,7 +34,13 @@ def build(bld):
 
     obj = bld.new_task_gen('cc', 'program')
     obj.target = "test_server"
-    obj.source = ['runner/main.c', 'runner/valgrind.c', '../src/xmms/streamtype.c', '../src/xmms/object.c'] + server_suite
+    obj.source = ['runner/main.c', 'runner/valgrind.c', '../src/xmms/streamtype.c',
+        '../src/xmms/config.c', '../src/xmms/error.c', '../src/lib/xmmsipc/msg.c',
+        '../src/lib/xmmsipc/transport.c','../src/lib/xmmssocket/socket_unix.c',
+        '../src/lib/xmmsipc/url.c', '../src/lib/xmmssocket/socket_common.c',
+        '../src/xmms/compat/thread_name_prctl.c', '../src/lib/xmmsipc/transport_unix.c',
+        '../src/lib/xmmsipc/socket_unix.c', '../src/lib/xmmsipc/socket_tcp.c',
+        '../src/xmms/ipc.c', '../src/xmms/object.c'] + server_suite
     obj.includes = '. ../ runner/ ../src ../src/includepriv ../src/include'
     obj.uselib_local = 'xmmstypes'
     obj.uselib = 'cunit ncurses valgrind glib2 gthread2 DISABLE_WRITESTRINGS'

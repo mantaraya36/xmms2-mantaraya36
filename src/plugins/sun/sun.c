@@ -192,7 +192,7 @@ xmms_sun_open (xmms_output_t *output)
 	audio_info_t info;
 	audio_encoding_t enc;
 	const xmms_config_property_t *val;
-	const gchar *dev;
+	gchar *dev;
 
 	XMMS_DBG ("XMMS_SUN_OPEN");
 
@@ -211,6 +211,7 @@ xmms_sun_open (xmms_output_t *output)
 	AUDIO_INITINFO (&info);
 
 	data->fd = open (dev, O_WRONLY);
+	g_free (dev);
 	if (data->fd < 0) {
 		xmms_log_error ("%s: %s", dev, (gchar *)strerror (errno));
 		return FALSE;
@@ -249,8 +250,8 @@ xmms_sun_new (xmms_output_t *output)
 	audio_info_t info;
 	audio_encoding_t enc;
 	const xmms_config_property_t *val;
-	const gchar *mixdev;
-	const gchar *dev;
+	gchar *mixdev;
+	gchar *dev;
 	gint tmp_audio_fd;
 	gint i, j, k;
 	gint support = 0;
@@ -263,6 +264,7 @@ xmms_sun_new (xmms_output_t *output)
 	XMMS_DBG ("device = %s", dev);
 
 	tmp_audio_fd = open (dev, O_WRONLY);
+	g_free (dev);
 	if (tmp_audio_fd < 0) {
 		return FALSE;
 	}
@@ -274,6 +276,7 @@ xmms_sun_new (xmms_output_t *output)
 	mixdev = xmms_config_property_get_string (val);
 
 	data->mixer_fd = open (mixdev, O_WRONLY);
+	g_free (mixdev);
 
 	if (data->mixer_fd != -1) {
 		data->have_mixer = FALSE;

@@ -39,7 +39,7 @@
 
 struct xmms_bindata_St {
 	xmms_object_t obj;
-	const gchar *bindir;
+	gchar *bindir;
 };
 
 static xmms_bindata_t *global_bindata;
@@ -102,6 +102,10 @@ xmms_bindata_init ()
 static void
 xmms_bindata_destroy (xmms_object_t *obj)
 {
+	xmms_bindata_t *bindata;
+	if (bindata->bindir) {
+		g_free (bindata->bindir);
+	}
 	xmms_bindata_unregister_ipc_commands ();
 }
 

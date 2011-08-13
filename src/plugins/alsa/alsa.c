@@ -195,15 +195,17 @@ static gboolean
 xmms_alsa_probe_modes (xmms_output_t *output, xmms_alsa_data_t *data)
 {
 	const xmms_config_property_t *cv;
-	const gchar *dev;
+	gchar *dev;
 	int i, j, k, err;
 
 	cv = xmms_output_config_lookup (output, "device");
 	dev = xmms_config_property_get_string (cv);
+	xmms_object_unref (cv);
 
 	if (!dev) {
 		XMMS_DBG ("Device not found in config, using default");
-		dev = "default";
+		g_free (dev);
+		dev = g_strdup ("default");
 	}
 
 	XMMS_DBG ("Probing device: %s", dev);
@@ -214,7 +216,7 @@ xmms_alsa_probe_modes (xmms_output_t *output, xmms_alsa_data_t *data)
 		xmms_log_error ("Couldn't open device: %s", dev);
 		return FALSE;
 	}
-
+	g_free (dev);
 	snd_pcm_nonblock (data->pcm, 0);
 
 	for (i = 0; i < G_N_ELEMENTS (formats); i++) {
@@ -327,7 +329,7 @@ xmms_alsa_open (xmms_output_t *output)
 {
 	xmms_alsa_data_t *data;
 	const xmms_config_property_t *cv;
-	const gchar *dev;
+	gchar *dev;
 	gint err = 0;
 
 	g_return_val_if_fail (output, FALSE);
@@ -339,7 +341,7 @@ xmms_alsa_open (xmms_output_t *output)
 
 	if (!dev) {
 		XMMS_DBG ("Device not found in config, using default");
-		dev = "default";
+		dev = g_strdup ("default");
 	}
 
 	XMMS_DBG ("Opening device: %s", dev);
@@ -347,11 +349,11 @@ xmms_alsa_open (xmms_output_t *output)
 	/* Open the device */
 	err = snd_pcm_open (&(data->pcm), dev, SND_PCM_STREAM_PLAYBACK,
 	                    SND_PCM_NONBLOCK);
+	g_free(dev);
 	if (err < 0) {
 		xmms_log_error ("Cannot open audio device: %s", snd_strerror (err));
 		return FALSE;
 	}
-
 	snd_pcm_nonblock (data->pcm, 0);
 
 	return TRUE;
@@ -496,7 +498,7 @@ static gboolean
 xmms_alsa_mixer_setup (xmms_output_t *output, xmms_alsa_data_t *data)
 {
 	const xmms_config_property_t *cv;
-	const gchar *dev, *name;
+	gchar *dev, *name;
 	glong alsa_min_vol = 0, alsa_max_vol = 0;
 	gint index, err;
 
@@ -507,6 +509,7 @@ xmms_alsa_mixer_setup (xmms_output_t *output, xmms_alsa_data_t *data)
 	if (err < 0) {
 		xmms_log_error ("Failed to open empty mixer: %s", snd_strerror (err));
 		data->mixer = NULL;
+		g_free(dev);
 
 		return FALSE;
 	}
@@ -517,9 +520,11 @@ xmms_alsa_mixer_setup (xmms_output_t *output, xmms_alsa_data_t *data)
 		                snd_strerror (err));
 		snd_mixer_close (data->mixer);
 		data->mixer = NULL;
+		g_free(dev);
 
 		return FALSE;
 	}
+	g_free(dev);
 
 	err = snd_mixer_selem_register (data->mixer, NULL, NULL);
 	if (err < 0) {
@@ -551,6 +556,7 @@ xmms_alsa_mixer_setup (xmms_output_t *output, xmms_alsa_data_t *data)
 	}
 
 	data->mixer_elem = xmms_alsa_find_mixer_elem (data->mixer, index, name);
+	g_free (name);
 	if (!data->mixer_elem) {
 		xmms_log_error ("Failed to find mixer element");
 		snd_mixer_close (data->mixer);

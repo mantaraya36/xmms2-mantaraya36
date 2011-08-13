@@ -26,6 +26,7 @@
 #define XMMS_CONFIG_SYSTEMWIDE SYSCONFDIR "/xmms2.conf"
 
 void xmms_config_init (const gchar *filename);
+xmms_config_t *xmms_config_new (const gchar *filename);
 void xmms_config_shutdown (void);
 
 gboolean xmms_config_save (void);

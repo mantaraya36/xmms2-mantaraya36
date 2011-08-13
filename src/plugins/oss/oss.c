@@ -307,7 +307,7 @@ xmms_oss_open (xmms_output_t *output)
 {
 	xmms_oss_data_t *data;
 	const xmms_config_property_t *val;
-	const gchar *dev;
+	gchar *dev;
 	guint param;
 
 	g_return_val_if_fail (output, FALSE);
@@ -320,6 +320,7 @@ xmms_oss_open (xmms_output_t *output)
 	dev = xmms_config_property_get_string (val);
 
 	data->fd = open (dev, O_RDWR);
+	g_free (dev);
 	if (data->fd == -1)
 		return FALSE;
 
@@ -348,8 +349,7 @@ xmms_oss_new (xmms_output_t *output)
 {
 	xmms_oss_data_t *data;
 	xmms_config_property_t *val;
-	const gchar *dev;
-	const gchar *mixdev;
+	gchar *dev, *mixdev;
 	int i,j,k, param, fmts, fd, version;
 
 	g_return_val_if_fail (output, FALSE);
@@ -363,6 +363,7 @@ xmms_oss_new (xmms_output_t *output)
 	XMMS_DBG ("device = %s", dev);
 
 	fd = open (dev, O_WRONLY);
+	g_free (dev);
 	if (fd == -1)
 		return FALSE;
 
@@ -420,6 +421,7 @@ xmms_oss_new (xmms_output_t *output)
 		else
 			data->have_mixer = TRUE;
 	}
+	g_free(mixdev);
 
 	XMMS_DBG ("OpenSoundSystem initilized!");
 

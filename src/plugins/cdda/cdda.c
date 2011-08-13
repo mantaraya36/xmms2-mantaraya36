@@ -126,7 +126,7 @@ xmms_cdda_init (xmms_xform_t *xform)
 	gchar *disc_id = NULL;
 	gchar *cddb_id = NULL;
 	xmms_config_property_t *val;
-	const gchar *device;
+	gchar *device;
 	const gchar *metakey;
 	gboolean ret = TRUE;
 
@@ -145,8 +145,10 @@ xmms_cdda_init (xmms_xform_t *xform)
 	device = xmms_config_property_get_string (val);
 
 	if (!get_disc_ids (device, &disc_id, &cddb_id, 0)) {
+		g_free (device);
 		return FALSE;
 	}
+	g_free (device);
 
 	url += 7;
 	url_data = g_strsplit (url, "/", 2);
@@ -258,16 +260,19 @@ xmms_cdda_browse (xmms_xform_t *xform, const gchar *url, xmms_error_t *error)
 	track_t track_count, t;
 	gchar cdda_url[XMMS_PATH_MAX];
 	xmms_config_property_t *val;
-	const gchar *device;
+	gchar *device;
 	gchar *disc_id;
 
 	g_return_val_if_fail (xform, FALSE);
 
 	val = xmms_xform_config_lookup (xform, "device");
 	device = xmms_config_property_get_string (val);
+
 	if (!get_disc_ids (device, &disc_id, 0, &track_count)) {
+		g_free (device);
 		return FALSE;
 	}
+	g_free (device);
 
 	for (t = 1; t <= track_count; t++) {
 		gchar trackno[3];
@@ -387,8 +392,8 @@ open_cd (xmms_xform_t *xform)
 {
 	CdIo_t *cdio;
 	xmms_config_property_t *val;
-	const gchar *device;
-	const gchar *accessmode;
+	gchar *device;
+	gchar *accessmode;
 
 	cdio_log_set_handler (log_handler);
 
@@ -413,6 +418,8 @@ open_cd (xmms_xform_t *xform)
 		cdio_set_speed (cdio, 1);
 		xmms_log_info ("Opened device '%s'.", device);
 	}
+	g_free (accessmode);
+	g_free (device);
 
 	return cdio;
 }

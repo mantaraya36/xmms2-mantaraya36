@@ -124,7 +124,7 @@ xmms_id3v1_parse (xmms_xform_t *xform, guchar *buf)
 {
 	xmms_config_property_t *config;
 	id3v1tag_t *tag = (id3v1tag_t *) buf;
-	const char *encoding;
+	gchar *encoding;
 	const gchar *metakey;
 
 	if (strncmp (tag->tag, "TAG", 3) != 0) {
@@ -182,6 +182,7 @@ xmms_id3v1_parse (xmms_xform_t *xform, guchar *buf)
 		xmms_id3v1_set (xform, metakey, tag->u.v1_0.comment,
 		                sizeof (tag->u.v1_0.comment), encoding);
 	}
+	g_free (encoding);
 
 	return TRUE;
 }

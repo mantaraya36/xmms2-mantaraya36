@@ -149,6 +149,7 @@ xmms_ices_new (xmms_output_t *output)
 {
 	xmms_ices_data_t *data;
 	xmms_config_property_t *val;
+	gchar *tmp;
 
 	shout_init ();
 
@@ -159,36 +160,58 @@ xmms_ices_new (xmms_output_t *output)
 	shout_set_protocol (data->shout, SHOUT_PROTOCOL_HTTP);
 
 	val = xmms_output_config_lookup (output, "host");
-	shout_set_host (data->shout, xmms_config_property_get_string (val));
+	tmp = xmms_config_property_get_string (val);
+
+	shout_set_host (data->shout, tmp);
+	g_free (tmp);
 
 	val = xmms_output_config_lookup (output, "port");
 	shout_set_port (data->shout, xmms_config_property_get_int (val));
 
 	val = xmms_output_config_lookup (output, "password");
-	shout_set_password (data->shout, xmms_config_property_get_string (val));
+	tmp = xmms_config_property_get_string (val);
+	shout_set_password (data->shout, tmp);
+	g_free (tmp);
 
 	val = xmms_output_config_lookup (output, "user");
-	shout_set_user (data->shout, xmms_config_property_get_string (val));
+	tmp = xmms_config_property_get_string (val);
+	shout_set_user (data->shout, tmp);
+	g_free (tmp);
 
 	shout_set_agent (data->shout, "XMMS/" XMMS_VERSION);
 
 	val = xmms_output_config_lookup (output, "mount");
-	shout_set_mount (data->shout, xmms_config_property_get_string (val));
+	tmp = xmms_config_property_get_string (val);
+
+	shout_set_mount (data->shout, tmp);
+	g_free (tmp);
 
 	val = xmms_output_config_lookup (output, "public");
 	shout_set_public (data->shout, xmms_config_property_get_int (val));
 
 	val = xmms_output_config_lookup (output, "streamname");
-	shout_set_name (data->shout, xmms_config_property_get_string (val));
+	tmp = xmms_config_property_get_string (val);
+
+	shout_set_name (data->shout, tmp);
+	g_free (tmp);
 
 	val = xmms_output_config_lookup (output, "streamdescription");
-	shout_set_description (data->shout, xmms_config_property_get_string (val));
+	tmp = xmms_config_property_get_string (val);
+
+	shout_set_description (data->shout, tmp);
+	g_free (tmp);
 
 	val = xmms_output_config_lookup (output, "streamgenre");
-	shout_set_genre (data->shout, xmms_config_property_get_string (val));
+	tmp = xmms_config_property_get_string (val);
+
+	shout_set_genre (data->shout, tmp);
+	g_free (tmp);
 
 	val = xmms_output_config_lookup (output, "streamurl");
-	shout_set_url (data->shout, xmms_config_property_get_string (val));
+	tmp = xmms_config_property_get_string (val);
+
+	shout_set_url (data->shout, tmp);
+	g_free (tmp);
 
 	xmms_output_private_data_set (output, data);
 	xmms_output_format_add (output, XMMS_SAMPLE_FORMAT_FLOAT, 2, 44100);

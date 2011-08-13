@@ -437,13 +437,15 @@ xmms_ipc_client_destroy (xmms_ipc_client_t *client)
 void
 on_config_ipcsocket_change (xmms_object_t *object, xmmsv_t *_data, gpointer udata)
 {
-	const gchar *value;
+	gchar *value;
 
 	XMMS_DBG ("Shutting down ipc server threads through config property \"core.ipcsocket\" change.");
 
 	xmms_ipc_shutdown ();
 	value = xmms_config_property_get_string ((xmms_config_property_t *) object);
+
 	xmms_ipc_setup_server (value);
+	g_free (value);
 }
 
 /**

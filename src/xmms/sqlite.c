@@ -367,7 +367,8 @@ xmms_sqlite_create (gboolean *create)
 	xmms_config_property_t *cv;
 	gchar *tmp;
 	gboolean analyze = FALSE;
-	const gchar *dbpath;
+	gchar *dbpath;
+	gboolean dbopen;
 	gint version = 0;
 	sqlite3 *sql;
 	guint i;
@@ -380,8 +381,8 @@ xmms_sqlite_create (gboolean *create)
 	if (!g_file_test (dbpath, G_FILE_TEST_EXISTS)) {
 		*create = TRUE;
 	}
-
-	if (sqlite3_open (dbpath, &sql)) {
+	dbopen = sqlite3_open (dbpath, &sql);
+	if (dbopen) {
 		xmms_log_fatal ("Error opening sqlite db: %s", sqlite3_errmsg (sql));
 		return FALSE;
 	}
@@ -402,6 +403,7 @@ xmms_sqlite_create (gboolean *create)
 			if (sqlite3_open (dbpath, &sql)) {
 				xmms_log_fatal ("Error creating sqlite db: %s",
 				                sqlite3_errmsg (sql));
+				g_free (dbpath);
 				g_free (old);
 				return FALSE;
 			}
@@ -499,7 +501,7 @@ xmms_sqlite_create (gboolean *create)
 		 */
 		sqlite3_exec (sql, set_version_stm, NULL, NULL, NULL);
 	}
-
+	g_free (dbpath);
 	sqlite3_close (sql);
 
 	XMMS_DBG ("xmms_sqlite_create done!");
@@ -513,13 +515,15 @@ sqlite3 *
 xmms_sqlite_open ()
 {
 	sqlite3 *sql;
-	const gchar *dbpath;
+	gchar *dbpath;
 	xmms_config_property_t *cv;
+	gboolean dbopen;
 
 	cv = xmms_config_lookup ("medialib.path");
 	dbpath = xmms_config_property_get_string (cv);
-
-	if (sqlite3_open (dbpath, &sql)) {
+	dbopen = sqlite3_open (dbpath, &sql);
+	g_free (dbpath);
+	if (dbopen) {
 		xmms_log_fatal ("Error opening sqlite db: %s", sqlite3_errmsg (sql));
 		return NULL;
 	}

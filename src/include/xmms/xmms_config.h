@@ -27,11 +27,11 @@ typedef struct xmms_config_property_St xmms_config_property_t;
 
 xmms_config_property_t *xmms_config_lookup (const gchar *path);
 
-const gchar *xmms_config_property_lookup_get_string (xmms_config_t *conf,
+gchar *xmms_config_property_lookup_get_string (xmms_config_t *conf,
                                                      const gchar *key,
                                                      xmms_error_t *err);
-const gchar *xmms_config_property_get_string (const xmms_config_property_t *prop);
-gint xmms_config_property_get_int (const xmms_config_property_t *prop);
+gchar *xmms_config_property_get_string (const xmms_config_property_t *prop);
+gint32 xmms_config_property_get_int (const xmms_config_property_t *prop);
 gfloat xmms_config_property_get_float (const xmms_config_property_t *prop);
 const gchar *xmms_config_property_get_name (const xmms_config_property_t *prop);
 
@@ -41,6 +41,21 @@ void xmms_config_property_set_data (xmms_config_property_t *prop, const gchar *d
 
 void xmms_config_property_callback_set (xmms_config_property_t *prop, xmms_object_handler_t cb, gpointer userdata);
 void xmms_config_property_callback_remove (xmms_config_property_t *prop, xmms_object_handler_t cb, gpointer userdata);
+
+
+/* new api */
+xmmsv_t *xmms_config_get (xmms_config_t *config, const gchar *path);
+gboolean xmms_config_set (xmms_config_t *config, const gchar *path, xmmsv_t *value);
+
+gboolean xmms_config_set_int (xmms_config_t *config, const gchar *path, gint32 value);
+gboolean xmms_config_set_float (xmms_config_t *config, const gchar *path, gfloat value);
+gboolean xmms_config_set_string (xmms_config_t *config, const gchar *path, const gchar *value);
+
+gint32 xmms_config_get_int (xmms_config_t *config, const gchar *path, gboolean *ok);
+gfloat xmms_config_get_float (xmms_config_t *config, const gchar *path, gboolean *ok);
+gchar* xmms_config_get_string (xmms_config_t *config, const gchar *path, gboolean *ok);
+
+/* TODO write the callback setting functions */
 
 G_END_DECLS
 

@@ -170,7 +170,7 @@ xmms_curl_init (xmms_xform_t *xform)
 	xmms_config_property_t *val;
 	xmms_error_t error;
 	gint metaint, verbose, connecttimeout, readtimeout, useproxy, authproxy;
-	const gchar *proxyaddress, *proxyuser, *proxypass;
+	gchar *proxyaddress, *proxyuser, *proxypass;
 	gchar proxyuserpass[90];
 	const gchar *url;
 	curl_version_info_data *version;
@@ -211,6 +211,8 @@ xmms_curl_init (xmms_xform_t *xform)
 
 	g_snprintf (proxyuserpass, sizeof (proxyuserpass), "%s:%s", proxyuser,
 	            proxypass);
+	g_free (proxyuser);
+	g_free (proxypass);
 
 	data->buffer = g_malloc (CURL_MAX_WRITE_SIZE);
 	data->url = g_strdup (url);
@@ -270,6 +272,7 @@ xmms_curl_init (xmms_xform_t *xform)
 			                  proxyuserpass);
 		}
 	}
+	g_free (proxyaddress);
 
 	curl_easy_setopt (data->curl_easy, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt (data->curl_easy, CURLOPT_VERBOSE, verbose);

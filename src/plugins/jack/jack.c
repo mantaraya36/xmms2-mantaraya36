@@ -111,12 +111,13 @@ xmms_jack_connect (xmms_output_t *output, xmms_jack_data_t *data)
 {
 	int i;
 	const xmms_config_property_t *cv;
-	const gchar *clientname;
+	gchar *clientname;
 
 	cv = xmms_output_config_lookup (output, "clientname");
 	clientname = xmms_config_property_get_string (cv);
 
 	data->jack = jack_client_open (clientname, JackNullOption, NULL);
+	g_free (clientname);
 	if (!data->jack) {
 		return FALSE;
 	}

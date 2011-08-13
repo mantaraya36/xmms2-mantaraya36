@@ -306,7 +306,7 @@ xmms_modplug_config_changed (xmms_object_t *obj, xmmsv_t *_value,
 	xmms_modplug_data_t *data = udata;
 	xmms_config_property_t *prop = (xmms_config_property_t *) obj;
 	const gchar *name;
-	const gchar *value;
+	gchar *value;
 	gint intvalue;
 
 	name = xmms_config_property_get_name (prop);
@@ -375,6 +375,7 @@ xmms_modplug_config_changed (xmms_object_t *obj, xmmsv_t *_value,
 			}
 		}
 	}
+	g_free (value);
 
 	ModPlug_SetSettings (&data->settings);
 }

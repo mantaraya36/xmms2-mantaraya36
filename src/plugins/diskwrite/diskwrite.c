@@ -119,7 +119,7 @@ xmms_diskwrite_new (xmms_output_t *output)
 {
 	xmms_diskwrite_data_t *data;
 	xmms_config_property_t *val;
-	const gchar *tmp;
+	gchar *tmp;
 
 	g_return_val_if_fail (output, FALSE);
 
@@ -136,6 +136,7 @@ xmms_diskwrite_new (xmms_output_t *output)
 	tmp = xmms_config_property_get_string (val);
 	if (tmp) {
 		g_snprintf (data->destdir, sizeof (data->destdir), "%s", tmp);
+		g_free (tmp);
 	}
 
 	xmms_object_connect (XMMS_OBJECT (output),
@@ -255,13 +256,15 @@ static void
 on_dest_directory_changed (xmms_object_t *object, xmmsv_t *_value, gpointer udata)
 {
 	xmms_diskwrite_data_t *data = udata;
-	const char *value;
+	gchar *value;
 
 	g_return_if_fail (data);
 
 	value = xmms_config_property_get_string ((xmms_config_property_t *)object);
+
 	if (value) {
 		g_snprintf (data->destdir, sizeof (data->destdir), "%s", value);
+		g_free (value);
 	} else {
 		data->destdir[0] = '\0';
 	}

@@ -222,7 +222,8 @@ static void
 xmms_sid_get_songlength (xmms_xform_t *xform)
 {
 	xmms_config_property_t *config;
-	const gchar *tmp, *md5sum, *songlength_path;
+	const gchar *tmp, *md5sum;
+	gchar *songlength_path;
 	gint subtune = 1;
 	GIOChannel* io;
 	GString *buf;
@@ -232,22 +233,28 @@ xmms_sid_get_songlength (xmms_xform_t *xform)
 	config = xmms_xform_config_lookup (xform, "songlength_path");
 	g_return_if_fail (config);
 	songlength_path = xmms_config_property_get_string (config);
-	if (!songlength_path[0])
+
+	if (!songlength_path[0]) {
+		g_free (songlength_path);
 		return;
+	}
 
 	if (xmms_xform_metadata_get_str (xform, "subtune", &tmp)) {
 		subtune = atoi (tmp);
 	}
 
 	if (!xmms_xform_metadata_get_str (xform, "HVSCfingerprint", &md5sum)) {
+		g_free (songlength_path);
 		return;
 	}
 
 	io = g_io_channel_new_file (songlength_path, "r", NULL);
 	if (!io) {
 		xmms_log_error ("Unable to load songlengths database '%s'", songlength_path);
+		g_free (songlength_path);
 		return;
 	}
+	g_free (songlength_path);
 
 	buf = g_string_new ("");
 	while (g_io_channel_read_line_string (io, buf, NULL, NULL) == G_IO_STATUS_NORMAL) {

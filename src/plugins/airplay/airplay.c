@@ -175,7 +175,7 @@ xmms_airplay_thread (gpointer arg)
 {
 	xmms_output_t *output = (xmms_output_t *)arg;
 	xmms_config_property_t *val;
-	const gchar *tmp;
+	gchar *tmp;
 	xmms_airplay_data_t *data;
 	raop_client_t *rc;
 	fd_set rfds, wfds, efds;
@@ -215,6 +215,7 @@ xmms_airplay_thread (gpointer arg)
 			XMMS_DBG ("Connecting to %s", tmp);
 			ret = raop_client_connect (rc, tmp, RAOP_DEFAULT_PORT);
 			g_mutex_lock (data->raop_mutex);
+			g_free (tmp);
 			if (ret == RAOP_EOK) {
 				raop_client_set_stream_cb (rc, xmms_airplay_stream_cb, output);
 				raop_client_get_volume (rc, &data->volume);

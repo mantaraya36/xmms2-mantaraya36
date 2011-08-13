@@ -1466,7 +1466,7 @@ add_effects (xmms_xform_t *last, xmms_medialib_entry_t entry,
 	for (effect_no = 0; TRUE; effect_no++) {
 		xmms_config_property_t *cfg;
 		gchar key[64];
-		const gchar *name;
+		gchar *name;
 
 		g_snprintf (key, sizeof (key), "effect.order.%i", effect_no);
 
@@ -1478,10 +1478,12 @@ add_effects (xmms_xform_t *last, xmms_medialib_entry_t entry,
 		name = xmms_config_property_get_string (cfg);
 
 		if (!name[0]) {
+			g_free (name);
 			continue;
 		}
 
 		last = xmms_xform_new_effect (last, entry, goal_formats, name);
+		g_free (name);
 	}
 
 	return last;
@@ -1531,7 +1533,7 @@ update_effect_properties (xmms_object_t *object, xmmsv_t *data,
                           gpointer userdata)
 {
 	gint effect_no = GPOINTER_TO_INT (userdata);
-	const gchar *name;
+	gchar *name;
 
 	xmms_config_property_t *cfg;
 	xmms_xform_plugin_t *xform_plugin;
@@ -1560,6 +1562,7 @@ update_effect_properties (xmms_object_t *object, xmmsv_t *data,
 			                               GINT_TO_POINTER (effect_no + 1));
 		}
 	}
+	g_free (name);
 }
 
 static void
@@ -1571,7 +1574,9 @@ effect_callbacks_init (void)
 	xmms_xform_plugin_t *xform_plugin;
 	xmms_plugin_t *plugin;
 	gchar key[64];
-	const gchar *name;
+	gchar *name;
+	gchar last_name[64];
+	int len = sizeof (last_name);
 
 	for (effect_no = 0; ; effect_no++) {
 		g_snprintf (key, sizeof (key), "effect.order.%i", effect_no);
@@ -1584,13 +1589,16 @@ effect_callbacks_init (void)
 		                                   GINT_TO_POINTER (effect_no));
 
 		name = xmms_config_property_get_string (cfg);
+		g_strlcpy (last_name, name, len);
 		if (!name[0]) {
+			g_free (name);
 			continue;
 		}
 
 		plugin = xmms_plugin_find (XMMS_PLUGIN_TYPE_XFORM, name);
 		if (!plugin) {
 			xmms_log_error ("Couldn't find any effect named '%s'", name);
+			g_free (name);
 			continue;
 		}
 
@@ -1599,11 +1607,12 @@ effect_callbacks_init (void)
 		                                            "1", NULL, NULL);
 
 		xmms_object_unref (plugin);
+		g_free (name);
 	}
 
 	/* the name stored in the last present property was not "" or there was no
 	   last present property */
-	if ((!effect_no) || name[0]) {
+	if ((!effect_no) || last_name[0]) {
 			xmms_config_property_register (key, "", update_effect_properties,
 			                               GINT_TO_POINTER (effect_no));
 	}

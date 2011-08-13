@@ -137,6 +137,7 @@ xmms_replaygain_init (xmms_xform_t *xform)
 	xmms_replaygain_data_t *data;
 	xmms_config_property_t *cfgv;
 	xmms_sample_format_t fmt;
+	gchar *tmp;
 
 	g_return_val_if_fail (xform, FALSE);
 
@@ -150,7 +151,9 @@ xmms_replaygain_init (xmms_xform_t *xform)
 	                                   xmms_replaygain_config_changed,
 	                                   xform);
 
-	data->mode = parse_mode (xmms_config_property_get_string (cfgv));
+	tmp = xmms_config_property_get_string (cfgv);
+	data->mode = parse_mode (tmp);
+	g_free (tmp);
 
 	cfgv = xmms_xform_config_lookup (xform, "use_anticlip");
 	xmms_config_property_callback_set (cfgv,
@@ -164,7 +167,9 @@ xmms_replaygain_init (xmms_xform_t *xform)
 	                                   xmms_replaygain_config_changed,
 	                                   xform);
 
-	data->preamp = pow (10.0, atof (xmms_config_property_get_string (cfgv)) / 20.0);
+	tmp = xmms_config_property_get_string (cfgv);
+	data->preamp = pow (10.0, atof (tmp) / 20.0);
+	g_free (tmp);
 
 	cfgv = xmms_xform_config_lookup (xform, "enabled");
 	xmms_config_property_callback_set (cfgv,
@@ -282,7 +287,7 @@ xmms_replaygain_config_changed (xmms_object_t *obj, xmmsv_t *_val, gpointer udat
 	xmms_xform_t *xform = udata;
 	xmms_replaygain_data_t *data;
 	gboolean dirty = FALSE;
-	const char *value;
+	gchar *value;
 
 	data = xmms_xform_private_data_get (xform);
 	g_return_if_fail (data);
@@ -308,6 +313,7 @@ xmms_replaygain_config_changed (xmms_object_t *obj, xmmsv_t *_val, gpointer udat
 	if (dirty) {
 		compute_gain (xform, data);
 	}
+	g_free (value);
 }
 
 static void

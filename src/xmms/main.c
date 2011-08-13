@@ -241,7 +241,7 @@ change_output (xmms_object_t *object, xmmsv_t *_data, gpointer userdata)
 {
 	xmms_output_plugin_t *plugin;
 	xmms_main_t *mainobj = (xmms_main_t*)userdata;
-	const gchar *outname;
+	gchar *outname;
 
 	if (!mainobj->output)
 		return;
@@ -251,6 +251,7 @@ change_output (xmms_object_t *object, xmmsv_t *_data, gpointer userdata)
 	xmms_log_info ("Switching to output %s", outname);
 
 	plugin = (xmms_output_plugin_t *)xmms_plugin_find (XMMS_PLUGIN_TYPE_OUTPUT, outname);
+	g_free (outname);
 	if (!plugin) {
 		xmms_log_error ("Baaaaad output plugin, try to change the output.plugin config variable to something useful");
 	} else {
@@ -270,9 +271,12 @@ xmms_main_destroy (xmms_object_t *object)
 	xmms_main_t *mainobj = (xmms_main_t *) object;
 	xmms_object_cmd_arg_t arg;
 	xmms_config_property_t *cv;
+	gchar *tmp;
 
 	cv = xmms_config_lookup ("core.shutdownpath");
-	do_scriptdir (xmms_config_property_get_string (cv), "stop");
+	tmp = xmms_config_property_get_string (cv);
+	do_scriptdir (tmp, "stop");
+	g_free (tmp);
 
 	/* stop output */
 	xmms_object_cmd_arg_init (&arg);
@@ -422,7 +426,10 @@ main (int argc, char **argv)
 	gboolean showhelp = FALSE;
 	const gchar *outname = NULL;
 	const gchar *ipcpath = NULL;
+	gchar *outname_loc = NULL;
+	gchar *ipcpath_loc = NULL;
 	gchar *ppath = NULL;
+	gchar *tmp_path = NULL;
 	int status_fd = -1;
 	GOptionContext *context = NULL;
 	GError *error = NULL;
@@ -516,7 +523,9 @@ main (int argc, char **argv)
 	                                    "%H:%M:%S ",
 	                                    NULL, NULL);
 
-	xmms_log_set_format (xmms_config_property_get_string (cv));
+	tmp = xmms_config_property_get_string (cv);
+	xmms_log_set_format (tmp);
+	g_free(tmp);
 
 	xmms_fallback_ipcpath_get (default_path, sizeof (default_path));
 
@@ -530,15 +539,18 @@ main (int argc, char **argv)
 		 * if not ipcpath is specifed on the cmd line we
 		 * grab it from the config
 		 */
-		ipcpath = xmms_config_property_get_string (cv);
+		ipcpath_loc = xmms_config_property_get_string (cv);
+	} else {
+		ipcpath_loc = g_strdup (ipcpath);
 	}
 
-	if (!xmms_ipc_setup_server (ipcpath)) {
+	if (!xmms_ipc_setup_server (ipcpath_loc)) {
 		xmms_ipc_shutdown ();
 		xmms_log_fatal ("IPC failed to init!");
 	}
 
 	if (!xmms_plugin_init (ppath)) {
+		g_free (ipcpath_loc);
 		return 1;
 	}
 
@@ -557,9 +569,10 @@ main (int argc, char **argv)
 		xmms_config_property_set_data (cv, outname);
 	}
 
-	outname = xmms_config_property_get_string (cv);
-	xmms_log_info ("Using output plugin: %s", outname);
-	o_plugin = (xmms_output_plugin_t *)xmms_plugin_find (XMMS_PLUGIN_TYPE_OUTPUT, outname);
+	outname_loc = xmms_config_property_get_string (cv);
+	xmms_log_info ("Using output plugin: %s", outname_loc);
+	o_plugin = (xmms_output_plugin_t *)xmms_plugin_find (XMMS_PLUGIN_TYPE_OUTPUT, outname_loc);
+	g_free (outname_loc);
 	if (!o_plugin) {
 		xmms_log_error ("Baaaaad output plugin, try to change the"
 		                "output.plugin config variable to something useful");
@@ -584,7 +597,7 @@ main (int argc, char **argv)
 	mainobj->starttime = time (NULL);
 
 	/* Dirty hack to tell XMMS_PATH a valid path */
-	g_strlcpy (default_path, ipcpath, sizeof (default_path));
+	g_strlcpy (default_path, ipcpath_loc, sizeof (default_path));
 
 	tmp = strchr (default_path, ';');
 	if (tmp) {
@@ -594,8 +607,9 @@ main (int argc, char **argv)
 	g_setenv ("XMMS_PATH", default_path, TRUE);
 
 	/* Also put the full path for clients that understands */
-	g_setenv("XMMS_PATH_FULL", ipcpath, TRUE);
+	g_setenv("XMMS_PATH_FULL", ipcpath_loc, TRUE);
 
+	g_free (ipcpath_loc);
 	tmp = XMMS_BUILD_PATH ("shutdown.d");
 	cv = xmms_config_property_register ("core.shutdownpath",
 	                                    tmp, NULL, NULL);
@@ -607,8 +621,9 @@ main (int argc, char **argv)
 	g_free (tmp);
 
 	/* Startup dir */
-	do_scriptdir (xmms_config_property_get_string (cv), "start");
-
+	tmp_path = xmms_config_property_get_string (cv);
+	do_scriptdir (tmp_path, "start");
+	g_free (tmp_path);
 	xmms_set_thread_name ("x2 main");
 
 	mainloop = g_main_loop_new (NULL, FALSE);

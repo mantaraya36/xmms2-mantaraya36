@@ -59,11 +59,24 @@ typedef struct dump_tree_data_St {
 } dump_tree_data_t;
 
 static GTree *xmms_config_client_list_values (xmms_config_t *conf, xmms_error_t *err);
+static void xmms_config_property_destroy (xmms_object_t *object);
 static xmms_config_property_t *xmms_config_property_new (const gchar *name);
 static gchar *xmms_config_client_get_value (xmms_config_t *conf, const gchar *key, xmms_error_t *err);
 static gchar *xmms_config_client_register_value (xmms_config_t *config, const gchar *name, const gchar *def_value, xmms_error_t *error);
 static gint compare_key (gconstpointer a, gconstpointer b, gpointer user_data);
 static void xmms_config_client_set_value (xmms_config_t *conf, const gchar *key, const gchar *value, xmms_error_t *err);
+static xmmsv_t *xmms_config_path_data (xmms_config_t *config, const gchar *path);
+static xmmsv_t *xmms_config_path_parent (xmms_config_t *config, const gchar *path);
+gboolean value_is_consistent (xmmsv_t *config_value, xmmsv_t *value);
+gboolean list_is_consistent (xmmsv_t *config_value, xmmsv_t *value);
+gboolean dict_is_consistent (xmmsv_t *config_value, xmmsv_t *value);
+void get_last_config_name (const gchar* path, gchar *last);
+gboolean config_register_path (xmms_config_t *config, const gchar *path);
+gboolean is_digit (const gchar *s);
+gboolean fill_tree_from_values (xmmsv_t *parent_node, const gchar *prefix, GTree *tree);
+static gboolean dump_node_tree (xmmsv_t *node, dump_tree_data_t *data);
+gboolean xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmmsv_t *value);
+
 
 #include "config_ipc.c"
 
@@ -86,7 +99,7 @@ struct xmms_config_St {
 	xmms_object_t obj;
 
 	const gchar *filename;
-	GTree *properties;
+	xmmsv_t *properties_list;
 
 	/* Lock on globals are great! */
 	GMutex *mutex;
@@ -96,6 +109,7 @@ struct xmms_config_St {
 	GQueue *states;
 	GQueue *sections;
 	gchar *value_name;
+	gchar *value_type;
 	guint version;
 };
 
@@ -108,7 +122,7 @@ struct xmms_config_property_St {
 	/** Name of the config directive */
 	const gchar *name;
 	/** The data */
-	gchar *value;
+	xmmsv_t *value;
 };
 
 /**
@@ -117,12 +131,12 @@ struct xmms_config_property_St {
  * we can have the convenience of having it as a global variable.
  */
 
-static xmms_config_t *global_config;
+static xmms_config_t *global_config = NULL;
 
 /**
  * Config file version
  */
-#define XMMS_CONFIG_VERSION 2
+#define XMMS_CONFIG_VERSION 3
 
 /**
  * @}
@@ -138,14 +152,15 @@ static xmms_config_t *global_config;
  * Lookup config key and return its associated value as a string.
  * This is a convenient function to make it easier to get a configuration value
  * rather than having to call #xmms_config_property_get_string separately.
+ * The caller must free the returned string using g_free().
  *
  * @param conf Global config
  * @param key Configuration property to lookup
  * @param err if error occurs this will be filled in
  *
- * @return A string with the value. If the value is an int it will return NULL
+ * @return A string with the value.
  */
-const gchar *
+gchar *
 xmms_config_property_lookup_get_string (xmms_config_t *conf, const gchar *key,
                                         xmms_error_t *err)
 {
@@ -170,13 +185,19 @@ xmms_config_property_lookup_get_string (xmms_config_t *conf, const gchar *key,
 xmms_config_property_t *
 xmms_config_lookup (const gchar *path)
 {
-	xmms_config_property_t *prop;
-	g_return_val_if_fail (global_config, NULL);
+	xmms_config_property_t *prop = NULL;
+	xmms_config_t *config = global_config;
+	xmmsv_t *value;
 
-	g_mutex_lock (global_config->mutex);
-	prop = g_tree_lookup (global_config->properties, path);
-	g_mutex_unlock (global_config->mutex);
+	g_return_val_if_fail (config, NULL);
 
+	value = xmms_config_get (config, path);
+
+	if (value) {
+		prop = xmms_object_new (xmms_config_property_t, xmms_config_property_destroy);
+		prop->name = g_strdup (path);
+		prop->value = value;
+	}
 	return prop;
 }
 
@@ -201,32 +222,25 @@ xmms_config_property_get_name (const xmms_config_property_t *prop)
 void
 xmms_config_property_set_data (xmms_config_property_t *prop, const gchar *data)
 {
-	GTree *dict;
+	xmms_config_t *config = global_config;
+	xmmsv_t *value;
 
 	g_return_if_fail (prop);
 	g_return_if_fail (data);
 
-	/* check whether the value changed at all */
-	if (prop->value && !strcmp (prop->value, data))
-		return;
+	value = xmmsv_new_string (data);
+	if (xmms_config_set (config, prop->name, value)) {
+		xmms_object_emit (XMMS_OBJECT (prop),
+		                  XMMS_IPC_SIGNAL_CONFIGVALUE_CHANGED,
+		                  (gpointer) data);
 
-	g_free (prop->value);
-	prop->value = g_strdup (data);
-	xmms_object_emit (XMMS_OBJECT (prop),
-	                  XMMS_IPC_SIGNAL_CONFIGVALUE_CHANGED,
-	                  (gpointer) data);
-
-	dict = g_tree_new_full (compare_key, NULL,
-	                        NULL, (GDestroyNotify) xmmsv_unref);
-	g_tree_insert (dict, (gchar *) prop->name,
-	               xmmsv_new_string (prop->value));
-
-	xmms_object_emit_f (XMMS_OBJECT (global_config),
-	                    XMMS_IPC_SIGNAL_CONFIGVALUE_CHANGED,
-	                    XMMSV_TYPE_DICT,
-	                    dict);
-
-	g_tree_destroy (dict);
+		/* FIXME is this necessary? */
+//		xmms_object_emit_f (XMMS_OBJECT (global_config),
+//		                    XMMS_IPC_SIGNAL_CONFIGVALUE_CHANGED,
+//		                    XMMSV_TYPE_DICT,
+//		                    dict);
+	}
+	xmmsv_unref (value);
 
 	/* save the database to disk, so we don't lose any data
 	 * if the daemon crashes
@@ -235,15 +249,25 @@ xmms_config_property_set_data (xmms_config_property_t *prop, const gchar *data)
 }
 
 /**
- * Return the value of a config property as a string
+ * Return the value of a config property as a string. If the property does not
+ exist an empty string will be returned. The caller must free the returned
+ string using g_free().
  * @param prop The config property
- * @return value as string
+ * @return value as string.
  */
-const gchar *
+gchar *
 xmms_config_property_get_string (const xmms_config_property_t *prop)
 {
+	gchar *s;
+	gboolean ok;
+	xmms_config_t *config = global_config;
+
 	g_return_val_if_fail (prop, NULL);
-	return prop->value;
+	s = xmms_config_get_string (config, prop->name, &ok);
+	if (!s) {
+		s = g_strdup ("");
+	}
+	return s;
 }
 
 /**
@@ -251,14 +275,20 @@ xmms_config_property_get_string (const xmms_config_property_t *prop)
  * @param prop The config property
  * @return value as int
  */
-gint
+gint32
 xmms_config_property_get_int (const xmms_config_property_t *prop)
 {
-	g_return_val_if_fail (prop, 0);
-	if (prop->value)
-		return atoi (prop->value);
+	gint32 i;
+	gboolean ok;
+	xmms_config_t *config = global_config;
 
-	return 0;
+	g_return_val_if_fail (prop, 0);
+	i = xmms_config_get_int (config, prop->name, &ok);
+	if (ok) {
+		return i;
+	} else {
+		return 0;
+	}
 }
 
 /**
@@ -269,11 +299,17 @@ xmms_config_property_get_int (const xmms_config_property_t *prop)
 gfloat
 xmms_config_property_get_float (const xmms_config_property_t *prop)
 {
-	g_return_val_if_fail (prop, 0.0);
-	if (prop->value)
-		return atof (prop->value);
+	gint32 f;
+	gboolean ok;
+	xmms_config_t *config = global_config;
 
-	return 0.0;
+	g_return_val_if_fail (prop, 0.0);
+	f = xmms_config_get_float (config, prop->name, &ok);
+	if (ok) {
+		return f;
+	} else {
+		return 0.0;
+	}
 }
 
 /**
@@ -320,6 +356,8 @@ xmms_config_property_callback_remove (xmms_config_property_t *prop,
 /**
  * Register a new config property. This should be called from the init code
  * as XMMS2 won't allow set/get on properties that haven't been registered.
+ * If the property is already registered, this statement will only register the
+ * callback function.
  *
  * @param path The path in the config tree.
  * @param default_value If the value was not found in the configfile, what
@@ -336,27 +374,269 @@ xmms_config_property_register (const gchar *path,
                                xmms_object_handler_t cb,
                                gpointer userdata)
 {
-
+	xmms_config_t *config;
 	xmms_config_property_t *prop;
+	xmmsv_t *value;
 
-	g_mutex_lock (global_config->mutex);
+	config = global_config;
 
-	prop = g_tree_lookup (global_config->properties, path);
+	prop = xmms_config_lookup (path);
+
 	if (!prop) {
-		prop = xmms_config_property_new (g_strdup (path));
-
-		xmms_config_property_set_data (prop, (gchar *) default_value);
-		g_tree_replace (global_config->properties,
-		               (gchar *) prop->name, prop);
+		value = xmmsv_new_string (default_value);
+		xmms_config_set (config, path, value);
+		xmmsv_unref (value);
+		prop = xmms_config_lookup (path);
 	}
 
 	if (cb) {
 		xmms_config_property_callback_set (prop, cb, userdata);
 	}
 
-	g_mutex_unlock (global_config->mutex);
-
 	return prop;
+}
+
+/**
+* Get the xmmst_v struct value for the given path. The returned value is a copy,
+* so the caller must unref it using xmmsv_unref().
+*
+* @param config The config singleton
+* @param path The path in the config tree.
+* @return A copy of the xmms_v struct in the path
+*/
+xmmsv_t *
+xmms_config_get (xmms_config_t *config, const gchar *path)
+{
+	xmmsv_t *value, *out_value = NULL;
+	g_mutex_lock (config->mutex);
+
+	value = xmms_config_path_data (config, path);
+	g_mutex_unlock (config->mutex);
+	if (value) {
+		out_value = xmmsv_copy (value);
+	}
+	return out_value;
+}
+
+/**
+* Set the xmmst_v struct value for the given path. If the property is not registered
+* it is registered in the tree. This function checks for consistency between the
+* existing tree nodes and the new ones, and will fail if there is a mismatch in
+* types. It is however valid to shrink or enlarge the tree.
+*
+* @param config The config singleton
+* @param path The path in the config tree.
+* @param value The node to set.
+* @return True if property was set succesfully
+*/
+gboolean
+xmms_config_set (xmms_config_t *config, const gchar *path, xmmsv_t *value)
+{
+	gboolean ret;
+
+	g_return_val_if_fail (path, FALSE);
+	g_mutex_lock (config->mutex);
+
+	ret = xmms_config_set_unlocked(config, path, value);
+
+	g_mutex_unlock (config->mutex);
+	return ret;
+}
+
+gboolean
+xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmmsv_t *value)
+{
+	xmmsv_t *parent_value, *data_value, *new_val;
+	gchar last_name[128];
+	gboolean ret;
+
+	if (strlen (path) == 0) { /* special case: root dictionary */
+		if (xmmsv_is_type (value, XMMSV_TYPE_DICT)) {
+			if (config->properties_list) {
+				xmmsv_unref (config->properties_list);
+			}
+			config->properties_list = xmmsv_copy (value);
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+	if (!config_register_path (config, path)) {
+		return FALSE;
+	}
+	parent_value = xmms_config_path_parent (config, path);
+	data_value = xmms_config_path_data (config, path);
+	get_last_config_name (path, last_name);
+	if (data_value && !value_is_consistent (data_value, value)) {
+		return FALSE;
+	}
+	if (xmmsv_is_type (parent_value, XMMSV_TYPE_DICT)) {
+		new_val = xmmsv_copy (value);
+		ret = xmmsv_dict_set (parent_value, last_name, new_val);
+		xmmsv_unref (new_val);
+	} else if (xmmsv_is_type (parent_value, XMMSV_TYPE_LIST)) {
+		gint index = strtol (last_name, NULL, 10);
+		if (index == 0 && strcmp (last_name, "0") != 0) {
+			xmms_log_error ("Invalid index for list node.");
+			return FALSE;
+		}
+		new_val = xmmsv_copy (value);
+		ret = xmmsv_list_set (parent_value, index, new_val);
+		xmmsv_unref (new_val);
+	}
+	return ret;
+	/* FIXME must check whether changes need to be made to callbacks because of shrinking lists */
+}
+
+/**
+* Set the integer value for the given path. If the property is not registered
+* it is registered in the tree. This function checks calls xmms_config_set internally
+*
+* @param config The config singleton
+* @param path The path in the config tree.
+* @param value The integer value
+* @return True if property was set succesfully
+*/
+gboolean
+xmms_config_set_int (xmms_config_t *config, const gchar *path, gint32 value)
+{
+	xmmsv_t *val;
+	gboolean ret;
+
+	val = xmmsv_new_int (value);
+	ret = xmms_config_set (config, path, val);
+	xmmsv_unref (val);
+	return ret;
+}
+
+/**
+* Set the float value for the given path. If the property is not registered
+* it is registered in the tree. This function checks calls xmms_config_set internally
+*
+* @param config The config singleton
+* @param path The path in the config tree.
+* @param value The float value
+* @return True if property was set succesfully
+*/
+gboolean xmms_config_set_float (xmms_config_t *config, const gchar *path, gfloat value)
+{
+	xmmsv_t *val;
+	gboolean ret;
+
+	val = xmmsv_new_float (value);
+	ret = xmms_config_set (config, path, val);
+	xmmsv_unref (val);
+	return ret;
+}
+
+/**
+* Set the string value for the given path. If the property is not registered
+* it is registered in the tree. This function checks calls xmms_config_set internally
+*
+* @param config The config singleton
+* @param path The path in the config tree.
+* @param value The string value
+* @return True if property was set succesfully
+*/
+gboolean xmms_config_set_string (xmms_config_t *config, const gchar *path, const gchar *value)
+{
+	xmmsv_t *val;
+	gboolean ret;
+
+	val = xmmsv_new_string (value);
+	ret = xmms_config_set (config, path, val);
+	xmmsv_unref (val);
+	return ret;
+}
+
+/**
+* Gets the integer value for the given path. If the node is of float type, no conversion
+* is made and the return value will be garbage. If the node is a string, the value
+* will be converted
+*
+* @param config The config singleton
+* @param path The path in the config tree.
+* @param ok Will be set to true if the property was found, otherwise the return value is garbage
+* @return The integer value
+*/
+gint32
+xmms_config_get_int (xmms_config_t *config, const gchar *path, gboolean *ok)
+{
+	xmmsv_t *value = NULL;
+	gint32 i = 0;
+	const gchar *s;
+
+	*ok = TRUE;
+	value = xmms_config_get (config, path);
+	if (value) {
+		*ok = xmmsv_get_int (value, &i);
+		if (!*ok) {
+			*ok = xmmsv_get_string (value, &s);
+			i = atoi (s);
+		}
+		xmmsv_unref (value);
+	}
+	return i;
+}
+
+/**
+* Gets the float value for the given path. If the node is of int type, no conversion
+* is made and the return value will be garbage. If the node is a string, the value
+* will be converted
+*
+* @param config The config singleton
+* @param path The path in the config tree.
+* @param ok Will be set to true if the property was found, otherwise the return value is garbage
+* @return The integer value
+*/
+gfloat
+xmms_config_get_float (xmms_config_t *config, const gchar *path, gboolean *ok)
+{
+	xmmsv_t *value = NULL;
+	const gchar *s;
+	gfloat f = 0.0;
+
+	*ok = TRUE;
+	value = xmms_config_get (config, path);
+	if (value) {
+		*ok = xmmsv_get_float (value, &f);
+		if (!*ok) {
+			*ok = xmmsv_get_string (value, &s);
+			f = strtod (s, NULL);
+		}
+		xmmsv_unref (value);
+	}
+	return f;
+}
+
+/**
+* Gets the string value for the given path. If the value is a float or an int, it
+* will be converted to a string.
+* In contrast to xmms_config_property_get_string, xmms_config_get_string will return
+* a NULL pointer if the property doesn't exist.
+* The caller must free returned string with g_free()
+*
+* @param config The config singleton
+* @param path The path in the config tree.
+* @param ok Will be set to true if the property was found, otherwise the return value is garbage
+* @return The string value
+*/
+gchar* xmms_config_get_string (xmms_config_t *config, const gchar *path, gboolean *ok)
+{
+	xmmsv_t *value = NULL;
+	const gchar *s;
+	gchar *out = NULL;
+
+	*ok = FALSE;
+	value = xmms_config_get (config, path);
+	if (value) {
+		*ok = xmmsv_get_string (value, &s);
+		if (*ok) {
+			out = g_strdup_printf ("%s", s);
+		}
+		xmmsv_unref (value);
+	}
+	return out;
 }
 
 /**
@@ -438,6 +718,7 @@ xmms_config_parse_start (GMarkupParseContext *ctx,
 	xmms_config_t *config = userdata;
 	xmms_configparser_state_t state;
 	const gchar *attr;
+	const gchar *type_attr;
 
 	state = get_current_state (name);
 	g_queue_push_head (config->states, GINT_TO_POINTER (state));
@@ -470,6 +751,7 @@ xmms_config_parse_start (GMarkupParseContext *ctx,
 		                      "Attribute 'name' missing");
 		return;
 	}
+	type_attr = lookup_attribute (attr_name, attr_data, "type");
 
 	switch (state) {
 		case XMMS_CONFIG_STATE_SECTION:
@@ -478,7 +760,13 @@ xmms_config_parse_start (GMarkupParseContext *ctx,
 			break;
 		case XMMS_CONFIG_STATE_PROPERTY:
 			g_free (config->value_name);
+			g_free (config->value_type);
 			config->value_name = g_strdup (attr);
+			if (type_attr) {
+				config->value_type = g_strdup (type_attr);
+			} else {
+				config->value_type = g_strdup ("string");
+			}
 
 			break;
 		default:
@@ -512,7 +800,9 @@ xmms_config_parse_end (GMarkupParseContext *ctx,
 			break;
 		case XMMS_CONFIG_STATE_PROPERTY:
 			g_free (config->value_name);
+			g_free (config->value_type);
 			config->value_name = NULL;
+			config->value_type = NULL;
 
 			break;
 		default:
@@ -538,8 +828,8 @@ xmms_config_parse_text (GMarkupParseContext *ctx,
                         GError **error)
 {
 	xmms_config_t *config = userdata;
+	xmmsv_t *value;
 	xmms_configparser_state_t state;
-	xmms_config_property_t *prop;
 	GList *l;
 	gchar key[256] = "";
 	gsize siz = sizeof (key);
@@ -557,10 +847,17 @@ xmms_config_parse_text (GMarkupParseContext *ctx,
 
 	g_strlcat (key, config->value_name, siz);
 
-	prop = xmms_config_property_new (g_strdup (key));
-	xmms_config_property_set_data (prop, (gchar *) text);
-
-	g_tree_replace (config->properties, (gchar *) prop->name, prop);
+	if (strcmp (config->value_type, "int32") == 0) {
+		value = xmmsv_new_int (atoi (text));
+	} else if (strcmp (config->value_type, "float") == 0) {
+		value = xmmsv_new_float (strtod (text, NULL));
+	} else if (strcmp (config->value_type, "string") == 0) {
+		value = xmmsv_new_string (text);
+	} else {
+		value = xmmsv_new_string (text);
+	}
+	xmms_config_set (config, key, value);
+	xmmsv_unref (value);
 }
 
 /**
@@ -587,19 +884,55 @@ xmms_config_client_set_value (xmms_config_t *conf,
 
 }
 
-/**
- * @internal Convert global config properties dict to a normal dict
- * @param key The dict key
- * @param property An xmms_config_property_t
- * @param udata The dict to store configvals
- */
-static gboolean
-xmms_config_foreach_dict (gpointer key, xmms_config_property_t *prop,
-                          GTree *dict)
+gboolean
+fill_tree_from_values (xmmsv_t *parent_node, const gchar *prefix, GTree *tree)
 {
-	g_tree_insert (dict, g_strdup (key), xmmsv_new_string (prop->value));
+	xmmsv_t *value;
+	const gchar *key;
+	gchar new_prefix[128];
+	gchar *new_key;
+	gint i;
+	xmmsv_list_iter_t *itl;
+	xmmsv_dict_iter_t *itd;
 
-	return FALSE; /* keep going */
+	switch (xmmsv_get_type (parent_node)) {
+	case XMMSV_TYPE_LIST:
+		g_return_val_if_fail (xmmsv_get_list_iter (parent_node, &itl), FALSE);
+		i = 0;
+		while (xmmsv_list_iter_valid (itl)) {
+			xmmsv_list_iter_entry (itl, &value);
+			sprintf (new_prefix, "%s.%i", prefix, i);
+			fill_tree_from_values (value, new_prefix, tree);
+			xmmsv_list_iter_next (itl);
+			i++;
+		}
+		xmmsv_list_iter_explicit_destroy (itl);
+		break;
+	case XMMSV_TYPE_DICT:
+		g_return_val_if_fail (xmmsv_get_dict_iter (parent_node, &itd), FALSE);
+		while (xmmsv_dict_iter_valid (itd)) {
+			xmmsv_dict_iter_pair (itd, &key, &value);
+			if (strlen (prefix) > 0) {
+				sprintf (new_prefix, "%s.%s", prefix, key);
+			} else { /* root node is always a dict */
+				strcpy (new_prefix, key);
+			}
+			fill_tree_from_values (value, new_prefix, tree);
+			xmmsv_dict_iter_next (itd);
+		}
+		xmmsv_dict_iter_explicit_destroy (itd);
+		break;
+	case XMMSV_TYPE_INT32:
+	case XMMSV_TYPE_FLOAT:
+	case XMMSV_TYPE_STRING:
+		new_key = g_strdup (prefix);
+		g_tree_insert (tree, new_key, parent_node);
+		break;
+	default:
+		xmms_log_error ("Invalid type in config");
+		break;
+	}
+	return TRUE;
 }
 
 /**
@@ -609,18 +942,16 @@ xmms_config_foreach_dict (gpointer key, xmms_config_property_t *prop,
  * @return a dict with config properties and values
  */
 static GTree *
-xmms_config_client_list_values (xmms_config_t *conf, xmms_error_t *err)
+xmms_config_client_list_values (xmms_config_t *config, xmms_error_t *err)
 {
 	GTree *ret;
 
 	ret = g_tree_new_full (compare_key, NULL,
-	                       g_free, (GDestroyNotify)xmmsv_unref);
+	                       g_free, NULL);
 
-	g_mutex_lock (conf->mutex);
-	g_tree_foreach (conf->properties,
-	                (GTraverseFunc) xmms_config_foreach_dict,
-	                (gpointer) ret);
-	g_mutex_unlock (conf->mutex);
+	g_mutex_lock (config->mutex);
+	fill_tree_from_values (config->properties_list, "", ret);
+	g_mutex_unlock (config->mutex);
 
 	return ret;
 }
@@ -650,7 +981,8 @@ xmms_config_destroy (xmms_object_t *object)
 
 	g_mutex_free (config->mutex);
 
-	g_tree_destroy (config->properties);
+	xmmsv_unref (config->properties_list);
+	global_config = NULL;
 
 	xmms_config_unregister_ipc_commands ();
 }
@@ -661,13 +993,6 @@ compare_key (gconstpointer a, gconstpointer b, gpointer user_data)
 	return strcmp ((gchar *) a, (gchar *) b);
 }
 
-static GTree *
-create_tree (void)
-{
-	return g_tree_new_full (compare_key, NULL, g_free,
-	                        (GDestroyNotify) __int_xmms_object_unref);
-}
-
 /**
  * @internal Clear data in a config object
  * @param config The config object to clear
@@ -675,13 +1000,26 @@ create_tree (void)
 static void
 clear_config (xmms_config_t *config)
 {
-	g_tree_destroy (config->properties);
-	config->properties = create_tree ();
+	xmmsv_unref (config->properties_list);
+	config->properties_list = xmmsv_new_dict();
 
 	config->version = XMMS_CONFIG_VERSION;
 
 	g_free (config->value_name);
+	g_free (config->value_type);
 	config->value_name = NULL;
+	config->value_type = NULL;
+}
+
+xmms_config_t *
+xmms_config_new (const gchar *filename)
+{
+	if (!global_config) {
+		xmms_config_init (filename);
+	} else {
+		xmms_log_error ("Config singleton exists.");
+	}
+	return global_config;
 }
 
 /**
@@ -702,7 +1040,7 @@ xmms_config_init (const gchar *filename)
 	config->mutex = g_mutex_new ();
 	config->filename = filename;
 
-	config->properties = create_tree ();
+	config->properties_list = xmmsv_new_dict ();
 
 	config->version = 0;
 	global_config = config;
@@ -791,87 +1129,92 @@ xmms_config_shutdown ()
 
 }
 
-static gboolean
-dump_tree (gchar *current_key, xmms_config_property_t *prop,
-           dump_tree_data_t *data)
+static void
+put_value_in_data (xmmsv_t *node, const gchar* prop_name, dump_tree_data_t *data)
 {
-	gchar *prop_name, section[256];
-	gchar *dot = NULL, *current_last_dot, *start = current_key;
+	gint32 int_val;
+	gfloat f;
+	const gchar *s;
+	gchar value_str[128];
 
-	prop_name = strrchr (current_key, '.');
-
-	/* check whether we need to open a new section.
-	 * this is always the case if data->prev_key == NULL.
-	 * but if the sections of the last key and the current key differ,
-	 * we also need to do that.
-	 */
-	if (data->prev_key) {
-		gchar *c = current_key, *o = data->prev_key;
-		gsize dots = 0;
-
-		/* position c and o at the respective ends of the common
-		 * prefixes of the previous and the current key.
-		 */
-		while (*c && *o && *c == *o) {
-			c++;
-			o++;
-
-			if (*c == '.')
-				start = c + 1;
-		};
-
-		/* from this position on, count the number of dots in the
-		 * previous key (= number of dots that are present in the
-		 * previous key, but no the current key).
-		 */
-		while (*o) {
-			if (*o == '.')
-				dots++;
-
-			o++;
-		};
-
-		/* we'll close the previous key's sections now, so we don't
-		 * have to worry about it next time this function is called.
-		 */
-		if (dots)
-			data->prev_key = NULL;
-
-		while (dots--) {
-			/* decrease indent level */
-			data->indent[--data->indent_level] = '\0';
-
-			fprintf (data->fp, "%s</section>\n", data->indent);
-		}
-	}
-
-	/* open section tags */
-	dot = strchr (start, '.');
-	current_last_dot = start - 1;
-
-	while (dot) {
-		strncpy (section, current_last_dot + 1, dot - current_last_dot + 1);
-		section[dot - current_last_dot - 1] = 0;
-
+	switch (xmmsv_get_type (node)) {
+	case XMMSV_TYPE_INT32:
+		xmmsv_get_int (node, &int_val);
+		sprintf (value_str, "%i", int_val);
+		fprintf (data->fp, "%s<property name=\"%s\" type=\"int32\">%s</property>\n",
+		         data->indent, prop_name, value_str);
+		break;
+	case XMMSV_TYPE_FLOAT:
+		xmmsv_get_float (node, &f);
+		sprintf (value_str, "%f", f);
+		fprintf (data->fp, "%s<property name=\"%s\" type=\"float\">%s</property>\n",
+		         data->indent, prop_name, value_str);
+		break;
+	case XMMSV_TYPE_STRING:
+		xmmsv_get_string (node, &s);
+		strcpy (value_str, s);
+		fprintf (data->fp, "%s<property name=\"%s\" type=\"string\">%s</property>\n",
+		         data->indent, prop_name, value_str);
+		break;
+	case XMMSV_TYPE_LIST:
+	case XMMSV_TYPE_DICT:
 		fprintf (data->fp, "%s<section name=\"%s\">\n",
-		         data->indent, section);
-
+		         data->indent, prop_name);
 		/* increase indent level */
 		g_assert (data->indent_level < 127);
 		data->indent[data->indent_level] = '\t';
 		data->indent[++data->indent_level] = '\0';
 
-		current_last_dot = dot;
-		dot = strchr (dot + 1, '.');
-	};
+		dump_node_tree (node, data);
+		/* close section */
+		data->indent[--data->indent_level] = '\0';
 
-	data->prev_key = current_key;
+		fprintf (data->fp, "%s</section>\n", data->indent);
+		break;
+	default:
+		/* do nothing with other types. we shouldn't get here anyway */
+		break;
+	}
+}
 
-	fprintf (data->fp, "%s<property name=\"%s\">%s</property>\n",
-	         data->indent, prop_name + 1,
-	         xmms_config_property_get_string (prop));
+static gboolean
+dump_node_tree (xmmsv_t *node, dump_tree_data_t *data)
+{
+	gchar prop_name[32];
+	const gchar *key;
 
-	return FALSE; /* keep going */
+	g_assert (xmmsv_is_type (node, XMMSV_TYPE_LIST)
+	          || xmmsv_is_type (node, XMMSV_TYPE_DICT));
+
+	if (xmmsv_is_type (node, XMMSV_TYPE_LIST)) {
+		gint i;
+		xmmsv_list_iter_t *it;
+		g_return_val_if_fail (xmmsv_get_list_iter (node, &it), FALSE);
+		i = 0;
+
+		while (xmmsv_list_iter_valid (it)) {
+			xmmsv_t *value;
+			sprintf (prop_name, "%i", i);
+			xmmsv_list_iter_entry (it, &value);
+			put_value_in_data (value, prop_name, data);
+			i++;
+			xmmsv_list_iter_next (it);
+		}
+		xmmsv_list_iter_explicit_destroy (it);
+
+	} else { /* is a dict */
+		xmmsv_dict_iter_t *it;
+		g_return_val_if_fail (xmmsv_get_dict_iter (node, &it), FALSE);
+		while (xmmsv_dict_iter_valid (it)) {
+			xmmsv_t *value;
+			xmmsv_dict_iter_pair (it, &key, &value);
+			put_value_in_data (value, key, data);
+			xmmsv_dict_iter_next (it);
+		}
+		xmmsv_dict_iter_explicit_destroy (it);
+	}
+
+	return TRUE;
 }
 
 /**
@@ -885,15 +1228,17 @@ xmms_config_save (void)
 	FILE *fp = NULL;
 	dump_tree_data_t data;
 
-	g_return_val_if_fail (global_config, FALSE);
+	xmms_config_t *config = global_config;
+
+	g_return_val_if_fail (config, FALSE);
 
 	/* don't try to save config while it's being read */
-	if (global_config->is_parsing)
+	if (config->is_parsing)
 		return FALSE;
 
-	if (!(fp = fopen (global_config->filename, "w"))) {
+	if (!(fp = fopen (config->filename, "w"))) {
 		xmms_log_error ("Couldn't open %s for writing.",
-		                global_config->filename);
+		                config->filename);
 		return FALSE;
 	}
 
@@ -907,8 +1252,7 @@ xmms_config_save (void)
 	strcpy (data.indent, "\t");
 	data.indent_level = 1;
 
-	g_tree_foreach (global_config->properties,
-	                (GTraverseFunc) dump_tree, &data);
+	dump_node_tree (config->properties_list, &data);
 
 	/* close the remaining section tags. the final indent level
 	 * was started with the opening xmms tag, so the loop condition
@@ -940,10 +1284,9 @@ xmms_config_property_destroy (xmms_object_t *object)
 {
 	xmms_config_property_t *prop = (xmms_config_property_t *) object;
 
-	/* don't free val->name here, it's taken care of in
-	 * xmms_config_destroy()
-	 */
-	g_free (prop->value);
+	g_free (prop->name);
+	xmmsv_unref (prop->value);
+
 }
 
 /**
@@ -981,4 +1324,279 @@ xmms_config_client_register_value (xmms_config_t *config,
 	return tmp;
 }
 
+xmmsv_t *
+xmms_config_path_data (xmms_config_t *config, const gchar *path)
+{
+	xmmsv_t *out_val, *val1, *val2;
+	gchar **node_names;
+	gint i;
+	gboolean found;
+
+	out_val = NULL;
+	val1 = config->properties_list;
+	g_return_val_if_fail (path, NULL);
+
+	node_names = g_strsplit (path, ".", 32);
+
+	if (node_names == NULL || node_names[0] == NULL) {
+		return NULL;
+	}
+	i = 0;
+	found = TRUE;
+
+	while (node_names[i]) {
+		if (xmmsv_is_type (val1, XMMSV_TYPE_DICT)) {
+			if (!xmmsv_dict_get (val1, node_names[i], &val2)) {
+				found = FALSE;
+				break; /* key not found! */
+			}
+		} else if (xmmsv_is_type (val2, XMMSV_TYPE_LIST)) {
+			int index = strtol (node_names[i], NULL, 10);
+			if (index == 0 && g_strcmp0 (node_names[i], "0") != 0) {
+				found = FALSE;
+				break;
+			}
+			if (!xmmsv_list_get (val1, index, &val2)) {
+				found = FALSE;
+				break;
+			}
+		} else { /* node is value */
+			break;
+		}
+		val1 = val2;
+		i++;
+	}
+
+	if (found && node_names[i] == NULL) { /* property matched */
+		out_val = val1;
+	}
+	g_strfreev (node_names);
+	return out_val;
+}
+
+xmmsv_t *
+xmms_config_path_parent (xmms_config_t *config, const gchar *path)
+{
+	xmmsv_t *parent, *val1, *val2;
+	gchar **node_names;
+	gint i;
+	guint len;
+	gboolean found;
+
+	parent = NULL;
+	val1 = config->properties_list;
+
+	node_names = g_strsplit (path, ".", -1);
+	len = g_strv_length (node_names);
+
+	if (node_names == NULL) {
+		return NULL;
+	}
+	i = 0;
+	found = TRUE;
+	/* no locking here as this function should be inside a lock already */
+	while (node_names[i]) {
+		if (xmmsv_is_type (val1, XMMSV_TYPE_DICT)) {
+			if (!xmmsv_dict_get (val1, node_names[i], &val2)) {
+				found = FALSE;
+				break; /* key not found! */
+			}
+		} else if (xmmsv_is_type (val2, XMMSV_TYPE_LIST)) {
+			int index = strtol (node_names[i], NULL, 10);
+			if (index == 0 && g_strcmp0 (node_names[i], "0") != 0) {
+				found = FALSE;
+				break;
+			}
+			if (!xmmsv_list_get (val1, index, &val2)) {
+				found = FALSE;
+				break;
+			}
+		} else { /* node is value */
+			i++;
+			break;
+		}
+		parent = val1;
+		val1 = val2;
+		i++;
+	}
+
+	if (!found || node_names[i] != NULL) { /* property not matched */
+		parent = NULL;
+	}
+	if (i == 0 && len == 1) {
+		parent = config->properties_list; /* should append to root node */
+	}
+	g_strfreev (node_names);
+	return parent;
+}
+
+gboolean
+value_is_consistent (xmmsv_t *config_value, xmmsv_t *value)
+{
+	g_assert (xmmsv_is_type (value, XMMSV_TYPE_INT32) || xmmsv_is_type (value, XMMSV_TYPE_FLOAT)
+	          || xmmsv_is_type (value, XMMSV_TYPE_STRING) || xmmsv_is_type (value, XMMSV_TYPE_LIST)
+	          || xmmsv_is_type (value, XMMSV_TYPE_DICT) || xmmsv_is_type (value, XMMSV_TYPE_NONE));
+	g_assert (xmmsv_is_type (config_value, XMMSV_TYPE_INT32) || xmmsv_is_type (config_value, XMMSV_TYPE_FLOAT)
+	          || xmmsv_is_type (config_value, XMMSV_TYPE_STRING) || xmmsv_is_type (config_value, XMMSV_TYPE_LIST)
+	          || xmmsv_is_type (config_value, XMMSV_TYPE_DICT) || xmmsv_is_type (config_value, XMMSV_TYPE_NONE));
+	if (xmmsv_is_type (value, XMMSV_TYPE_NONE)
+	        || xmmsv_is_type (config_value, XMMSV_TYPE_NONE)) {
+		return TRUE; /* none type is used to clear node types */
+	}
+	if (xmmsv_get_type (config_value) != xmmsv_get_type (value)) {
+		return FALSE;
+	}
+	if (xmmsv_is_type (config_value, XMMSV_TYPE_LIST)) {
+		return list_is_consistent (config_value, value);
+	} else if (xmmsv_is_type (config_value, XMMSV_TYPE_DICT)) {
+		return dict_is_consistent (config_value, value);
+	}
+	return TRUE;
+}
+
+gboolean
+list_is_consistent (xmmsv_t *config_value, xmmsv_t *value)
+{
+	xmmsv_list_iter_t *it1, *it2;
+	xmmsv_t *v1, *v2;
+
+	g_assert (config_value && value);
+	g_return_val_if_fail (xmmsv_get_list_iter (config_value, &it1), FALSE);
+	g_return_val_if_fail (xmmsv_get_list_iter (value, &it2), FALSE);
+	while (xmmsv_list_iter_valid (it1) && xmmsv_list_iter_valid (it2)) {
+		xmmsv_list_iter_entry (it1, &v1);
+		xmmsv_list_iter_entry (it2, &v2);
+		if (!value_is_consistent (v1,v2)) {
+			xmmsv_list_iter_explicit_destroy (it1);
+			xmmsv_list_iter_explicit_destroy (it2);
+			return FALSE;
+		}
+		xmmsv_list_iter_next (it1);
+		xmmsv_list_iter_next (it2);
+	}
+	xmmsv_list_iter_explicit_destroy (it1);
+	xmmsv_list_iter_explicit_destroy (it2);
+
+	return TRUE;
+}
+
+gboolean
+dict_is_consistent (xmmsv_t *config_value, xmmsv_t *value)
+{
+	xmmsv_dict_iter_t *it1, *it2;
+	xmmsv_t *v1, *v2;
+	const char *key1, *key2;
+
+	g_return_val_if_fail (xmmsv_get_dict_iter (config_value, &it1), FALSE);
+	g_return_val_if_fail (xmmsv_get_dict_iter (value, &it2), TRUE);
+	while (xmmsv_dict_iter_valid (it1) && xmmsv_dict_iter_valid (it2)) {
+		xmmsv_dict_iter_pair (it1, &key1, &v1);
+		xmmsv_dict_iter_pair (it2, &key2, &v2);
+		if (!value_is_consistent (v1,v2) ||
+		        strcmp (key1, key2) != 0) { /* TODO don't enforce order of keys */
+			xmmsv_dict_iter_explicit_destroy (it1);
+			xmmsv_dict_iter_explicit_destroy (it2);
+			return FALSE;
+		}
+		xmmsv_dict_iter_next (it1);
+		xmmsv_dict_iter_next (it2);
+	}
+	xmmsv_dict_iter_explicit_destroy (it1);
+	xmmsv_dict_iter_explicit_destroy (it2);
+
+	return TRUE;
+}
+
+void
+get_last_config_name (const gchar* path, gchar *last)
+{
+	gchar **parts;
+	gint i;
+
+	g_assert (path);
+	parts = g_strsplit (path, ".", -1);
+	i = 0;
+	g_assert (parts[0]);
+	while (parts[i+1]) {
+		i++;
+	}
+	strcpy (last, parts[i]);
+	g_strfreev (parts);
+}
+
+gboolean
+config_register_path (xmms_config_t *config, const gchar *path)
+{
+	gchar **parts;
+	gchar current_path[128];
+	gint len = sizeof (current_path);
+	gboolean ret;
+	gint i, numparts;
+	xmmsv_t *parent_value, *child_value;
+
+	parts = g_strsplit (path, ".", -1);
+	strcpy (current_path, "");
+	numparts = g_strv_length (parts);
+	ret = TRUE;
+	parent_value = xmms_config_path_parent (config, parts[0]);
+	g_strlcat (current_path, parts[0], len);
+
+	for (i = 0; i < numparts; i++) {
+		child_value = NULL;
+		if (xmmsv_is_type (parent_value, XMMSV_TYPE_LIST)) {
+			gint index = strtol (parts[i], NULL, 10);
+			xmmsv_list_get (parent_value, index, &child_value);
+		} else if (xmmsv_is_type (parent_value, XMMSV_TYPE_DICT)) {
+			xmmsv_dict_get (parent_value, parts[i], &child_value);
+		}
+		/* check if consistent */
+		if (!child_value) {
+			if (i < numparts - 1) {
+				if (is_digit (parts[i + 1])) {
+					child_value = xmmsv_new_list ();
+				} else {
+					child_value = xmmsv_new_dict ();
+				}
+			} else { /* last node in path */
+				child_value = xmmsv_new_none ();
+				if (i != numparts - 1) {
+					ret = FALSE;
+					break; /* would be nice to clean up created paths so far */
+				}
+			}
+			if (xmmsv_is_type (parent_value, XMMSV_TYPE_LIST)) {
+				gint index = strtol (parts[i], NULL, 10);
+				while (xmmsv_list_get_size (parent_value) <= index) {
+					xmmsv_list_append (parent_value, child_value);
+				}
+				ret = xmmsv_list_set (parent_value, index, child_value);
+			} else if (xmmsv_is_type (parent_value, XMMSV_TYPE_DICT)) {
+				ret = xmmsv_dict_set (parent_value, parts[i], child_value);
+			}
+			xmmsv_unref (child_value);
+		}
+		parent_value = child_value;
+		if (i < numparts - 1) {
+			g_strlcat (current_path, ".", len);
+			g_strlcat (current_path, parts[i + 1], len);
+		}
+	}
+	g_strfreev (parts);
+	return ret;
+}
+
+gboolean
+is_digit (const gchar *s)
+{
+	gint value;
+	gboolean ret;
+	gchar s2[16];
+
+	value = strtol (s, NULL, 10);
+	sprintf (s2, "%i", value);
+
+	ret = strcmp (s, s2) == 0 ? TRUE : FALSE;
+
+	return ret;
+}
 /** @} */

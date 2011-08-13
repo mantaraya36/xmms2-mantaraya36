@@ -109,7 +109,7 @@ xmms_ao_new (xmms_output_t *output)
 {
 	xmms_ao_data_t* data;
 	xmms_config_property_t *config;
-	const gchar *value;
+	gchar *value;
 	ao_sample_format format;
 	gint i, j, k;
 
@@ -136,16 +136,19 @@ xmms_ao_new (xmms_output_t *output)
 		/* failed to find a usable audio output device */
 		xmms_log_error ("Cannot find usable audio output device!");
 		ao_shutdown ();
+		g_free (value);
 		return FALSE;
 	} else {
 		ao_info *info = ao_driver_info (data->driver_id);
 		if (info->type != AO_TYPE_LIVE) {
 			xmms_log_error ("Selected driver cannot play live output");
 			ao_shutdown ();
+			g_free (value);
 			return FALSE;
 		}
 		XMMS_DBG ("Using libao driver %s (%s)", info->name, info->short_name);
 	}
+	g_free (value);
 
 	config = xmms_output_config_lookup (output, "device");
 	value = xmms_config_property_get_string (config);
@@ -157,7 +160,7 @@ xmms_ao_new (xmms_output_t *output)
 
 		data->options = g_malloc (sizeof (ao_option));
 		data->options->key = (gchar *) "dev";
-		data->options->value = (gchar *) value;
+		data->options->value = g_strdup (value);
 		data->options->next = NULL;
 
 		/* let's just use some common format to check if the device
@@ -178,6 +181,7 @@ xmms_ao_new (xmms_output_t *output)
 			}
 		}
 	}
+	g_free (value);
 	data->device = NULL;
 
 	/* probe for supported samplerates */
@@ -223,6 +227,7 @@ xmms_ao_destroy (xmms_output_t *output)
 		ao_option *current = data->options;
 		while (current) {
 			ao_option *next = current->next;
+			g_free (current->value);
 			g_free (current);
 			current = next;
 		}
