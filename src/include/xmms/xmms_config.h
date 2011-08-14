@@ -55,7 +55,10 @@ gint32 xmms_config_get_int (xmms_config_t *config, const gchar *path, gboolean *
 gfloat xmms_config_get_float (xmms_config_t *config, const gchar *path, gboolean *ok);
 gchar* xmms_config_get_string (xmms_config_t *config, const gchar *path, gboolean *ok);
 
-/* TODO write the callback setting functions */
+xmmsv_t *xmms_config_schema_register (xmms_config_t *config, const gchar *path, xmmsv_t *default_value, xmms_object_handler_t cb, gpointer userdata);
+
+void xmms_config_callback_set (xmmsv_t *value, xmms_object_handler_t cb, gpointer userdata);
+void xmms_config_callback_remove (xmmsv_t *value, xmms_object_handler_t cb, gpointer userdata);
 
 G_END_DECLS
 

@@ -30,6 +30,16 @@ CLEANUP () {
 	return 0;
 }
 
+CASE (test_xmmsv_builders)
+{
+	xmmsv_t *value;
+
+	value = xmmsv_build_list (XMMSV_LIST_ENTRY (xmmsv_build_dict (XMMSV_DICT_ENTRY_INT ("key", 20))),
+	                          XMMSV_LIST_ENTRY_INT (10),
+	                          XMMSV_LIST_END);
+	xmmsv_unref (value);
+}
+
 CASE (test_xmmsv_type_none)
 {
 	xmmsv_t *value = xmmsv_new_none ();

@@ -73,6 +73,10 @@ int xmmsv_get_bin (const xmmsv_t *val, const unsigned char **r, unsigned int *rl
 
 xmmsv_coll_t *xmmsv_coll_copy (xmmsv_coll_t *orig_coll);
 
+/* to access object for value. Needed to store callbacks for properties */
+void xmmsv_set_obj (xmmsv_t *val, void *obj);
+void *xmmsv_get_obj (const xmmsv_t *val);
+
 /* legacy aliases */
 int xmmsv_is_error (const xmmsv_t *val);
 

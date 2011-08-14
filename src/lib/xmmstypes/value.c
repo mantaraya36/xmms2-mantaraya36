@@ -112,6 +112,8 @@ struct xmmsv_St {
 	} value;
 	xmmsv_type_t type;
 
+	void *obj; /* to store object for properties callbacks */
+
 	int ref;  /* refcounting */
 };
 
@@ -352,6 +354,7 @@ xmmsv_new (xmmsv_type_t type)
 	}
 
 	val->type = type;
+	val->obj = NULL;
 
 	return xmmsv_ref (val);
 }
@@ -401,6 +404,9 @@ xmmsv_free (xmmsv_t *val)
 			}
 			val->value.bit.buf = NULL;
 			break;
+	}
+	if (val->obj) {
+		free (val->obj);
 	}
 
 	free (val);
@@ -601,6 +607,18 @@ duplicate_coll_value (xmmsv_t *val)
 	dup_val = xmmsv_new_coll (new_coll);
 
 	return dup_val;
+}
+
+void
+xmmsv_set_obj (xmmsv_t *val, void *obj)
+{
+	val->obj = obj;
+}
+
+void *
+xmmsv_get_obj (const xmmsv_t *val)
+{
+	return val->obj;
 }
 
 /* Merely legacy aliases */

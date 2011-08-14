@@ -151,6 +151,22 @@ xmms_xform_plugin_config_property_register (xmms_xform_plugin_t *xform_plugin,
 	                                             cb, userdata);
 }
 
+xmmsv_t *
+xmms_xform_plugin_config_schema_lookup (xmms_xform_plugin_t *xform_plugin, const gchar *key)
+{
+	xmms_plugin_t *plugin = (xmms_plugin_t *) xform_plugin;
+	return xmms_plugin_config_schema_lookup (plugin, key);
+}
+
+xmmsv_t *
+xmms_xform_plugin_config_schema_register (xmms_xform_plugin_t *xform_plugin, const gchar *name, xmmsv_t *default_value, xmms_object_handler_t cb, gpointer userdata)
+{
+	xmms_plugin_t *plugin = (xmms_plugin_t *) xform_plugin;
+	return xmms_plugin_config_schema_register (plugin,
+	                                           name,default_value, cb, userdata);
+}
+
+
 gboolean
 xmms_xform_plugin_can_init (const xmms_xform_plugin_t *plugin)
 {
