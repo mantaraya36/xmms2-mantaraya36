@@ -1457,6 +1457,41 @@ xmms_xform_config_lookup (xmms_xform_t *xform, const gchar *path)
 	return xmms_plugin_config_lookup ((xmms_plugin_t *) xform->plugin, path);
 }
 
+xmmsv_t *
+xmms_xform_config_schema_lookup (xmms_xform_t *xform,
+                                 const gchar *path)
+{
+	g_return_val_if_fail (xform->plugin, NULL);
+
+	return xmms_plugin_config_schema_lookup ((xmms_plugin_t *) xform->plugin, path);
+
+}
+
+void
+xmms_xform_config_callback_set (xmms_xform_t *xform,
+                                const gchar *path,
+                                xmms_object_handler_t cb,
+                                gpointer userdata)
+{
+	g_return_if_fail (xform->plugin);
+
+	xmms_plugin_config_callback_set ((xmms_plugin_t *) xform->plugin,
+	                                        path, cb, userdata);
+}
+
+void
+xmms_xform_config_callback_remove (xmms_xform_t *xform,
+                                   const gchar *path,
+                                   xmms_object_handler_t cb,
+                                   gpointer userdata)
+{
+	g_return_if_fail (xform->plugin);
+
+	xmms_plugin_config_callback_remove ((xmms_plugin_t *) xform->plugin,
+	                                        path, cb, userdata);
+}
+
+
 static xmms_xform_t *
 add_effects (xmms_xform_t *last, xmms_medialib_entry_t entry,
              GList *goal_formats)
@@ -1496,6 +1531,7 @@ xmms_xform_new_effect (xmms_xform_t *last, xmms_medialib_entry_t entry,
 	xmms_plugin_t *plugin;
 	xmms_xform_plugin_t *xform_plugin;
 	xmms_xform_t *xform;
+	xmmsv_t *schema;
 	gint priority;
 
 	plugin = xmms_plugin_find (XMMS_PLUGIN_TYPE_XFORM, name);
@@ -1521,10 +1557,12 @@ xmms_xform_new_effect (xmms_xform_t *last, xmms_medialib_entry_t entry,
 		xmms_log_info ("Effect '%s' failed to initialize, skipping",
 		               xmms_plugin_shortname_get (plugin));
 	}
-	xmms_xform_plugin_config_property_register (xform_plugin,
-	                                            "enabled", "0",
-	                                            NULL, NULL);
+	schema = xmmsv_new_int (0);
+	xmms_xform_plugin_config_schema_register (xform_plugin,
+	                                          "enabled", schema,
+	                                          NULL, NULL);
 	xmms_object_unref (plugin);
+	xmmsv_unref (schema);
 	return last;
 }
 

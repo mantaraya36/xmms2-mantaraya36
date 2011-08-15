@@ -75,6 +75,7 @@ static gboolean
 xmms_ladspa_plugin_setup (xmms_xform_plugin_t *xform_plugin)
 {
 	xmms_xform_methods_t methods;
+	xmmsv_t *schema;
 
 	XMMS_XFORM_METHODS_INIT (methods);
 
@@ -84,8 +85,10 @@ xmms_ladspa_plugin_setup (xmms_xform_plugin_t *xform_plugin)
 	methods.seek = xmms_xform_seek; /* Not needed */
 
 	xmms_xform_plugin_methods_set (xform_plugin, &methods);
-	xmms_xform_plugin_config_property_register (xform_plugin, "plugin", "",
-	                                            NULL, NULL);
+	/* TODO allow multiple plugins */
+	schema = xmmsv_new_string ("");
+	xmms_xform_plugin_config_schema_register (xform_plugin, "plugin", schema,
+	                                          NULL, NULL);
 
 	xmms_xform_plugin_indata_add (xform_plugin,
 	                              XMMS_STREAM_TYPE_MIMETYPE,
@@ -116,6 +119,7 @@ xmms_ladspa_init (xmms_xform_t *xform)
 	guint buf_size;
 	gint i;
 	gchar *value_property_name;
+	xmmsv_t *schema;
 
 	g_return_val_if_fail (xform, FALSE);
 
@@ -140,15 +144,23 @@ xmms_ladspa_init (xmms_xform_t *xform)
 
 	xmms_ladspa_allocate_buffers (priv);
 
-	config = xmms_xform_config_lookup (xform, "enabled");
-	g_return_val_if_fail (config, FALSE);
-	xmms_config_property_callback_set (config, ladspa_config_changed, priv);
-	priv->enabled = !!xmms_config_property_get_int (config);
+	xmms_xform_config_callback_set (xform, "enabled", ladspa_config_changed, priv);
+	schema = xmms_xform_config_schema_lookup (xform, "enabled");
+	g_return_val_if_fail (schema, FALSE);
+	xmmsv_get_int (schema, &(priv->enabled));
+	priv->enabled = !! priv->enabled;
+	xmmsv_unref (schema);
 
-	config = xmms_xform_config_lookup (xform, "plugin");
-	g_return_val_if_fail (config, FALSE);
-	xmms_config_property_callback_set (config, ladspa_config_changed, priv);
-	plugin = xmms_config_property_get_string (config);
+	xmms_xform_config_callback_set (xform, "plugin", ladspa_config_changed, priv);
+	schema = xmms_xform_config_schema_lookup (xform, "plugin");
+	g_return_val_if_fail (schema, FALSE);
+	/* TODO allow multiple plugins */
+	xmmsv_get_string (schema, &plugin);
+	xmmsv_unref (schema);
+
+	if (!ladspa_init_plugin (priv, plugin)) {
+		xmms_log_error ("Plugin init error");
+	}
 
 	i = 0;
 	value_property_name = g_strdup_printf ("ladspa.control.%i",
@@ -170,9 +182,6 @@ xmms_ladspa_init (xmms_xform_t *xform)
 	}
 
 	g_free (value_property_name);
-	if (!ladspa_init_plugin (priv, plugin)) {
-		xmms_log_error ("Plugin init error");
-	}
 	return TRUE;
 }
 

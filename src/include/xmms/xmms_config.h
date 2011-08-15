@@ -57,8 +57,8 @@ gchar* xmms_config_get_string (xmms_config_t *config, const gchar *path, gboolea
 
 xmmsv_t *xmms_config_schema_register (xmms_config_t *config, const gchar *path, xmmsv_t *default_value, xmms_object_handler_t cb, gpointer userdata);
 
-void xmms_config_callback_set (xmmsv_t *value, xmms_object_handler_t cb, gpointer userdata);
-void xmms_config_callback_remove (xmmsv_t *value, xmms_object_handler_t cb, gpointer userdata);
+void xmms_config_callback_set (const gchar *path, xmms_object_handler_t cb, gpointer userdata);
+void xmms_config_callback_remove (const gchar *path, xmms_object_handler_t cb, gpointer userdata);
 
 G_END_DECLS
 

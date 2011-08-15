@@ -166,7 +166,6 @@ xmms_xform_plugin_config_schema_register (xmms_xform_plugin_t *xform_plugin, con
 	                                           name,default_value, cb, userdata);
 }
 
-
 gboolean
 xmms_xform_plugin_can_init (const xmms_xform_plugin_t *plugin)
 {

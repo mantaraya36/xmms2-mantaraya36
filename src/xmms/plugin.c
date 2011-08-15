@@ -161,6 +161,41 @@ xmms_plugin_config_schema_register (xmms_plugin_t *plugin,
 	return value;
 }
 
+void
+xmms_plugin_config_callback_set (xmms_plugin_t *plugin,
+                                 const gchar *name,
+                                 xmms_object_handler_t cb,
+                                 gpointer userdata)
+{
+	gchar fullpath[XMMS_PLUGIN_SHORTNAME_MAX_LEN + 256];
+
+	g_return_if_fail (plugin);
+	g_return_if_fail (name);
+
+	g_snprintf (fullpath, sizeof (fullpath), "%s.%s",
+	            xmms_plugin_shortname_get (plugin), name);
+
+	xmms_config_callback_set (fullpath, cb, userdata);
+}
+
+void
+xmms_plugin_config_callback_remove (xmms_plugin_t *plugin,
+                                    const gchar *name,
+                                    xmms_object_handler_t cb,
+                                    gpointer userdata)
+{
+	gchar fullpath[XMMS_PLUGIN_SHORTNAME_MAX_LEN + 256];
+
+	g_return_if_fail (plugin);
+	g_return_if_fail (name);
+
+	g_snprintf (fullpath, sizeof (fullpath), "%s.%s",
+	            xmms_plugin_shortname_get (plugin), name);
+
+	xmms_config_callback_remove (fullpath, cb, userdata);
+}
+
+
 /**
  * @internal Get the type of this plugin
  * @param[in] plugin The plugin
