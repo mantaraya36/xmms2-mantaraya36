@@ -156,11 +156,11 @@ xmms_ladspa_init (xmms_xform_t *xform)
 	g_return_val_if_fail (schema, FALSE);
 	/* TODO allow multiple plugins */
 	xmmsv_get_string (schema, &plugin);
-	xmmsv_unref (schema);
 
 	if (!ladspa_init_plugin (priv, plugin)) {
 		xmms_log_error ("Plugin init error");
 	}
+	xmmsv_unref (schema);
 
 	i = 0;
 	value_property_name = g_strdup_printf ("ladspa.control.%i",

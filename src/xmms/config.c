@@ -77,7 +77,7 @@ gboolean fill_tree_from_values (xmmsv_t *parent_node, const gchar *prefix, GTree
 static gboolean dump_node_tree (xmmsv_t *node, dump_tree_data_t *data);
 gboolean xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmmsv_t *value);
 void xmms_config_value_callback_remove (xmmsv_t *value, xmms_object_handler_t cb, gpointer userdata);
-void xmms_config_value_callback_set (xmmsv_t *value, xmms_object_handler_t cb, gpointer userdata);
+void xmms_config_value_callback_set (xmmsv_t *value, const gchar *path, xmms_object_handler_t cb, gpointer userdata);
 gboolean xmms_config_set_if_not_existent (xmms_config_t *config, const gchar *prefix, xmmsv_t *default_value);
 
 #include "config_ipc.c"
@@ -193,7 +193,8 @@ xmms_config_lookup (const gchar *path)
 
 	g_return_val_if_fail (config, NULL);
 
-	value = xmms_config_get (config, path);
+	value = xmms_config_path_data (config, path);
+	xmmsv_ref (value);
 
 	if (value) {
 		prop = xmms_object_new (xmms_config_property_t, xmms_config_property_destroy);
@@ -320,7 +321,7 @@ xmms_config_property_callback_set (xmms_config_property_t *prop,
 
 	config = global_config;
 	value = xmms_config_path_data (config, prop->name);
-	xmms_config_value_callback_set (value, cb, userdata);
+	xmms_config_value_callback_set (value, prop->name, cb, userdata);
 }
 
 /**
@@ -431,7 +432,7 @@ xmms_config_set (xmms_config_t *config, const gchar *path, xmmsv_t *value)
 	gfloat f;
 	GTree *dict;
 	xmmsv_t *old_value;
-	xmms_object_t *obj;
+	xmms_config_property_t *obj;
 
 	g_return_val_if_fail (path, FALSE);
 	g_mutex_lock (config->mutex);
@@ -461,7 +462,7 @@ xmms_config_set (xmms_config_t *config, const gchar *path, xmmsv_t *value)
 
 	old_value = xmms_config_path_data (config, path);
 	if (data && old_value) {
-		obj = (xmms_object_t *) xmmsv_get_obj (old_value);
+		obj = (xmms_config_property_t *) xmmsv_get_obj (old_value);
 		if (obj) {
 			xmms_object_emit (XMMS_OBJECT (obj),
 			                  XMMS_IPC_SIGNAL_CONFIGVALUE_CHANGED,
@@ -491,11 +492,10 @@ gboolean
 xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmmsv_t *value)
 {
 	xmmsv_t *parent_value, *data_value, *new_val;
-	xmms_object_t *obj = NULL;
+	xmms_config_property_t *obj = NULL;
 	gchar last_name[128];
 	gboolean ret;
 
-	/* TODO copy over callback information from old tree */
 	if (strlen (path) == 0) { /* special case: root dictionary is completely replaced */
 		if (xmmsv_is_type (value, XMMSV_TYPE_DICT)) {
 			if (config->properties_list) {
@@ -513,8 +513,14 @@ xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmmsv_t *val
 	parent_value = xmms_config_path_parent (config, path);
 	data_value = xmms_config_path_data (config, path);
 	if (data_value && !xmmsv_is_type (data_value, XMMSV_TYPE_NONE)) {
-		obj = xmmsv_get_obj (value);
-		xmmsv_set_obj (value, NULL); /* take ownership of the object */
+		obj = xmmsv_get_obj (data_value);
+		if (obj) {
+			g_free (obj->name);
+			xmmsv_unref (obj->value);
+			obj->name = g_strdup (path);
+			obj->value = data_value;
+			xmmsv_set_obj (data_value, NULL); /* take ownership of the object */
+		}
 	}
 	get_last_config_name (path, last_name);
 	if (data_value && !value_is_consistent (data_value, value)) {
@@ -737,7 +743,7 @@ xmms_config_schema_register (xmms_config_t *config,
 	}
 
 	if (cb) {
-		xmms_config_value_callback_set (new_value, cb, userdata);
+		xmms_config_value_callback_set (new_value, path, cb, userdata);
 	}
 
 	return xmmsv_copy (new_value);
@@ -762,7 +768,7 @@ xmms_config_callback_set (const gchar *path,
 	value = xmms_config_path_data (config, path);
 	if (!value)
 		return;
-	xmms_config_value_callback_set (value, cb, userdata);
+	xmms_config_value_callback_set (value, path, cb, userdata);
 }
 
 /**
@@ -788,15 +794,19 @@ xmms_config_callback_remove (const gchar *path,
 
 void
 xmms_config_value_callback_set (xmmsv_t *value,
-                          xmms_object_handler_t cb,
-                          gpointer userdata)
+                                const gchar *path,
+                                xmms_object_handler_t cb,
+                                gpointer userdata)
 {
-	xmms_object_t *obj;
+	xmms_config_property_t *obj;
 	if (!cb)
 		return;
-	obj = (xmms_object_t *) xmmsv_get_obj (value);
+	obj = (xmms_config_property_t *) xmmsv_get_obj (value);
 	if (!obj) {
-		obj = xmms_object_new (xmms_object_t, NULL);
+		obj = xmms_object_new (xmms_config_property_t, xmms_config_property_destroy);
+		obj->name = g_strdup (path);
+		obj->value = value;
+		xmmsv_ref (value);
 		xmmsv_set_obj (value, obj);
 	}
 	xmms_object_connect (XMMS_OBJECT (obj),
@@ -809,11 +819,11 @@ xmms_config_value_callback_remove (xmmsv_t *value,
                           xmms_object_handler_t cb,
                           gpointer userdata)
 {
-	xmms_object_t *obj;
+	xmms_config_property_t *obj;
 	if (!cb)
 		return;
-
-	if ((obj = (xmms_object_t *) xmmsv_get_obj (value))) {
+	obj = (xmms_config_property_t *) xmmsv_get_obj (value);
+	if (obj) {
 		xmms_object_disconnect (XMMS_OBJECT (obj),
 		                        XMMS_IPC_SIGNAL_CONFIGVALUE_CHANGED, cb, userdata);
 	}
@@ -877,7 +887,7 @@ xmms_config_set_if_not_existent (xmms_config_t *config,
 	case XMMSV_TYPE_FLOAT:
 	case XMMSV_TYPE_STRING:
 	case XMMSV_TYPE_NONE:
-		ret = xmms_config_set (config, prefix, new_value);
+		/* end of tree, do nothing */
 		break;
 	default:
 		xmms_log_error ("Invalid type in config");
