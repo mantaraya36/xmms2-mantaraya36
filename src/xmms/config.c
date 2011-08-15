@@ -1132,16 +1132,62 @@ xmms_config_client_set_value (xmms_config_t *conf,
                               const gchar *key, const gchar *value,
                               xmms_error_t *err)
 {
-	xmms_config_property_t *prop;
+	xmmsv_t *schema, *member, *new_list;
+	gchar **values;
+	guint num;
+	gint32 i;
+	gfloat f;
 
-	prop = xmms_config_lookup (key);
-	if (prop) {
-		xmms_config_property_set_data (prop, value);
+	schema = xmms_config_path_data (conf, key);
+	if (schema) {
+		switch (xmmsv_get_type (schema)) {
+		case XMMSV_TYPE_LIST:
+			values = g_strsplit (value, ",", 0);
+			num = g_strv_length (values);
+			new_list = xmmsv_new_list();
+			for (i = 0; i < num; i++) {
+				if (xmmsv_list_get (schema, i, &member)) {
+					switch (xmmsv_get_type (member)) {
+					case XMMSV_TYPE_INT32:
+						i = atoi (value);
+						xmmsv_list_append (new_list, xmmsv_new_int (i));
+						break;
+					case XMMSV_TYPE_FLOAT:
+						f = atof (value);
+						xmmsv_list_append (new_list, xmmsv_new_float (f));
+						break;
+					case XMMSV_TYPE_STRING:
+						xmmsv_list_append (new_list, xmmsv_new_string (values[i]));
+						break;
+					default:
+						/* keep the rest as they are */
+						/* TODO give the client a warning? */
+						xmmsv_list_append (new_list, member);
+					}
+				}
+				xmms_config_set (conf, key, new_list);
+			}
+			break;
+		case XMMSV_TYPE_INT32:
+			i = atoi (value);
+			xmms_config_set_int (conf, key, i);
+			break;
+		case XMMSV_TYPE_FLOAT:
+			f = atof (value);
+			xmms_config_set_float (conf, key, f);
+			break;
+		case XMMSV_TYPE_STRING:
+			xmms_config_set_string (conf, key, value);
+			break;
+		default:
+			xmms_error_set (err, XMMS_ERROR_NOENT,
+			                "Trying to set invalid type");
+		}
 	} else {
 		xmms_error_set (err, XMMS_ERROR_NOENT,
 		                "Trying to set non-existent config property");
 	}
-
+	g_strfreev(values);
 }
 
 gboolean
