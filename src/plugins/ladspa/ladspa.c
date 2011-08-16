@@ -75,7 +75,7 @@ static gboolean
 xmms_ladspa_plugin_setup (xmms_xform_plugin_t *xform_plugin)
 {
 	xmms_xform_methods_t methods;
-	xmmsv_t *schema;
+	xmmsv_t *value;
 
 	XMMS_XFORM_METHODS_INIT (methods);
 
@@ -86,8 +86,8 @@ xmms_ladspa_plugin_setup (xmms_xform_plugin_t *xform_plugin)
 
 	xmms_xform_plugin_methods_set (xform_plugin, &methods);
 	/* TODO allow multiple plugins */
-	schema = xmmsv_new_string ("");
-	xmms_xform_plugin_config_schema_register (xform_plugin, "plugin", schema,
+	value = xmmsv_new_string ("");
+	xmms_xform_plugin_config_register_value (xform_plugin, "plugin", value,
 	                                          NULL, NULL);
 
 	xmms_xform_plugin_indata_add (xform_plugin,
@@ -119,7 +119,7 @@ xmms_ladspa_init (xmms_xform_t *xform)
 	guint buf_size;
 	gint i;
 	gchar *value_property_name;
-	xmmsv_t *schema;
+	xmmsv_t *value;
 
 	g_return_val_if_fail (xform, FALSE);
 
@@ -145,22 +145,22 @@ xmms_ladspa_init (xmms_xform_t *xform)
 	xmms_ladspa_allocate_buffers (priv);
 
 	xmms_xform_config_callback_set (xform, "enabled", ladspa_config_changed, priv);
-	schema = xmms_xform_config_schema_lookup (xform, "enabled");
-	g_return_val_if_fail (schema, FALSE);
-	xmmsv_get_int (schema, &(priv->enabled));
+	value = xmms_xform_config_lookup_value (xform, "enabled");
+	g_return_val_if_fail (value, FALSE);
+	xmmsv_get_int (value, &(priv->enabled));
 	priv->enabled = !! priv->enabled;
-	xmmsv_unref (schema);
+	xmmsv_unref (value);
 
 	xmms_xform_config_callback_set (xform, "plugin", ladspa_config_changed, priv);
-	schema = xmms_xform_config_schema_lookup (xform, "plugin");
-	g_return_val_if_fail (schema, FALSE);
+	value = xmms_xform_config_lookup_value (xform, "plugin");
+	g_return_val_if_fail (value, FALSE);
 	/* TODO allow multiple plugins */
-	xmmsv_get_string (schema, &plugin);
+	xmmsv_get_string (value, &plugin);
 
 	if (!ladspa_init_plugin (priv, plugin)) {
 		xmms_log_error ("Plugin init error");
 	}
-	xmmsv_unref (schema);
+	xmmsv_unref (value);
 
 	i = 0;
 	value_property_name = g_strdup_printf ("ladspa.control.%i",

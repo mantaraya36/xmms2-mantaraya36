@@ -56,7 +56,7 @@ CASE (test_register)
 	                          XMMSV_LIST_ENTRY_STR ("Yes sir."),
                               XMMSV_LIST_ENTRY_INT (6),
                               XMMSV_LIST_END);
-	value2 = xmms_config_schema_register (NULL,  "schema_test", value, NULL, NULL);
+	value2 = xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL);
 	CU_ASSERT_PTR_NOT_NULL (value2);
 	xmmsv_unref (value);
 	xmmsv_unref (value2);
@@ -82,7 +82,7 @@ CASE (test_register)
 	                          XMMSV_LIST_ENTRY_STR ("No sir."),
                               XMMSV_LIST_ENTRY_INT (66),
                               XMMSV_LIST_END);
-	value2 = xmms_config_schema_register (NULL,  "schema_test", value, NULL, NULL);
+	value2 = xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL);
 	CU_ASSERT_PTR_NOT_NULL (value2);
 	xmmsv_unref (value);
 	xmmsv_unref (value2);
@@ -110,7 +110,7 @@ CASE (test_register)
 	                          XMMSV_LIST_ENTRY_INT (90),
 	                          XMMSV_LIST_END);
 
-	value2 = xmms_config_schema_register (NULL,  "schema_test", value, NULL, NULL);
+	value2 = xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL);
 	CU_ASSERT_PTR_NOT_NULL (value2);
 	xmmsv_unref (value);
 	xmmsv_unref (value2);
@@ -120,7 +120,7 @@ CASE (test_register)
 	                          XMMSV_LIST_ENTRY_STR ("No sir."),
 	                          XMMSV_LIST_END);
 
-	value2 = xmms_config_schema_register (NULL,  "schema_test", value, NULL, NULL);
+	value2 = xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL);
 	CU_ASSERT_PTR_NOT_NULL (value2);
 	xmmsv_unref (value);
 	xmmsv_unref (value2);
@@ -130,7 +130,7 @@ CASE (test_register)
 	                          XMMSV_LIST_ENTRY_FLOAT (2.5),
 	                          XMMSV_LIST_END);
 
-	value2 = xmms_config_schema_register (NULL,  "schema_test", value, NULL, NULL);
+	value2 = xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL);
 	CU_ASSERT_PTR_NULL (value2);
 	xmmsv_unref (value);
 }

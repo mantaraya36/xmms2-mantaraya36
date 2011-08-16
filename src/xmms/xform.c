@@ -1458,12 +1458,12 @@ xmms_xform_config_lookup (xmms_xform_t *xform, const gchar *path)
 }
 
 xmmsv_t *
-xmms_xform_config_schema_lookup (xmms_xform_t *xform,
+xmms_xform_config_lookup_value (xmms_xform_t *xform,
                                  const gchar *path)
 {
 	g_return_val_if_fail (xform->plugin, NULL);
 
-	return xmms_plugin_config_schema_lookup ((xmms_plugin_t *) xform->plugin, path);
+	return xmms_plugin_config_lookup_value ((xmms_plugin_t *) xform->plugin, path);
 
 }
 
@@ -1531,7 +1531,7 @@ xmms_xform_new_effect (xmms_xform_t *last, xmms_medialib_entry_t entry,
 	xmms_plugin_t *plugin;
 	xmms_xform_plugin_t *xform_plugin;
 	xmms_xform_t *xform;
-	xmmsv_t *schema;
+	xmmsv_t *value;
 	gint priority;
 
 	plugin = xmms_plugin_find (XMMS_PLUGIN_TYPE_XFORM, name);
@@ -1557,12 +1557,12 @@ xmms_xform_new_effect (xmms_xform_t *last, xmms_medialib_entry_t entry,
 		xmms_log_info ("Effect '%s' failed to initialize, skipping",
 		               xmms_plugin_shortname_get (plugin));
 	}
-	schema = xmmsv_new_int (0);
-	xmms_xform_plugin_config_schema_register (xform_plugin,
-	                                          "enabled", schema,
+	value = xmmsv_new_int (0);
+	xmms_xform_plugin_config_register_value (xform_plugin,
+	                                          "enabled", value,
 	                                          NULL, NULL);
 	xmms_object_unref (plugin);
-	xmmsv_unref (schema);
+	xmmsv_unref (value);
 	return last;
 }
 

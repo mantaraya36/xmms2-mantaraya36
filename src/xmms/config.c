@@ -194,12 +194,12 @@ xmms_config_lookup (const gchar *path)
 	g_return_val_if_fail (config, NULL);
 
 	value = xmms_config_path_data (config, path);
-	xmmsv_ref (value);
 
 	if (value) {
 		prop = xmms_object_new (xmms_config_property_t, xmms_config_property_destroy);
 		prop->name = g_strdup (path);
 		prop->value = value;
+		xmmsv_ref (value);
 	}
 	return prop;
 }
@@ -369,15 +369,15 @@ xmms_config_property_register (const gchar *path,
 {
 	xmms_config_t *config;
 	xmms_config_property_t *prop;
-	xmmsv_t *value, *schema;
+	xmmsv_t *value, *prop_value;
 
 	config = global_config;
 
 	value = xmmsv_new_string (default_value);
 
-	schema = xmms_config_schema_register (config, path, value, cb, userdata);
+	prop_value = xmms_config_register_value (config, path, value, cb, userdata);
 	xmmsv_unref (value);
-	xmmsv_unref (schema);
+	xmmsv_unref (prop_value);
 	prop = xmms_config_lookup (path);
 	return prop;
 }
@@ -524,7 +524,7 @@ xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmmsv_t *val
 	}
 	get_last_config_name (path, last_name);
 	if (data_value && !value_is_consistent (data_value, value)) {
-		xmms_log_info ("Inconsistent schema. Old schema replaced.");
+		xmms_log_info ("Inconsistent value structure. Old structure replaced.");
 	}
 	if (xmmsv_is_type (parent_value, XMMSV_TYPE_DICT)) {
 		new_val = xmmsv_copy (value);
@@ -695,14 +695,14 @@ gchar* xmms_config_get_string (xmms_config_t *config, const gchar *path, gboolea
 }
 
 /**
- * Register a new config property schema. This should be called from the init code
+ * Register a new config property value. This should be called from the init code
  * as XMMS2 won't allow set/get on properties that haven't been registered.
- * If a property node of the schema is already registered, this statement will only register the
+ * If a property node of the value is already registered, this statement will only register the
  * callback function, without changing its value.
  *
  * @param config The config object
  * @param path The path in the config tree.
- * @param default_value Schema, holding values to set if the node doesn't exist
+ * @param default_value value holding values to set if the node doesn't exist
  * @param cb A callback function that will be called if the value is changed by
  * the client. Can be set to NULL.
  * @param userdata Data to pass to the callback function.
@@ -710,7 +710,7 @@ gchar* xmms_config_get_string (xmms_config_t *config, const gchar *path, gboolea
  * property.
  */
 xmmsv_t *
-xmms_config_schema_register (xmms_config_t *config,
+xmms_config_register_value (xmms_config_t *config,
                              const gchar *path,
                              xmmsv_t *default_value,
                              xmms_object_handler_t cb,
@@ -738,7 +738,8 @@ xmms_config_schema_register (xmms_config_t *config,
 			xmms_config_set (config, path, value);
 			xmmsv_unref (value);
 			xmms_config_set (config, path, default_value);
-			xmms_log_info ("Inconsistent schema. Old schema replaced.");
+			new_value = default_value;
+			xmms_log_info ("Inconsistent value struct. Replaced wiht new one");
 		}
 	}
 
@@ -1132,21 +1133,21 @@ xmms_config_client_set_value (xmms_config_t *conf,
                               const gchar *key, const gchar *value,
                               xmms_error_t *err)
 {
-	xmmsv_t *schema, *member, *new_list;
+	xmmsv_t *prop_value, *member, *new_list;
 	gchar **values;
 	guint num;
 	gint32 i;
 	gfloat f;
 
-	schema = xmms_config_path_data (conf, key);
-	if (schema) {
-		switch (xmmsv_get_type (schema)) {
+	prop_value = xmms_config_path_data (conf, key);
+	if (prop_value) {
+		switch (xmmsv_get_type (prop_value)) {
 		case XMMSV_TYPE_LIST:
 			values = g_strsplit (value, ",", 0);
 			num = g_strv_length (values);
 			new_list = xmmsv_new_list();
 			for (i = 0; i < num; i++) {
-				if (xmmsv_list_get (schema, i, &member)) {
+				if (xmmsv_list_get (prop_value, i, &member)) {
 					switch (xmmsv_get_type (member)) {
 					case XMMSV_TYPE_INT32:
 						i = atoi (value);
