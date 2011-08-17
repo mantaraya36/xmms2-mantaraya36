@@ -250,6 +250,13 @@ print_config_entry (const gchar *confname, xmmsv_t *val, void *udata)
 		g_printf ("%s = %s\n", confname, confval);
 		break;
 	}
+	case XMMSV_TYPE_FLOAT:
+	{
+		gfloat confval;
+		xmmsv_get_float (val, &confval);
+		g_printf ("%s = %f\n", confname, confval);
+		break;
+	}
 	case XMMSV_TYPE_INT32:
 	{
 		int confval;
