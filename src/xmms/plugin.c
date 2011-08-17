@@ -139,7 +139,7 @@ xmms_plugin_config_lookup_value (xmms_plugin_t *plugin, const gchar *key)
 	return value;
 }
 
-xmmsv_t *
+gboolean
 xmms_plugin_config_register_value (xmms_plugin_t *plugin,
                                    const gchar *name,
                                    xmmsv_t *default_value,
@@ -147,18 +147,18 @@ xmms_plugin_config_register_value (xmms_plugin_t *plugin,
                                    gpointer userdata)
 {
 	gchar fullpath[XMMS_PLUGIN_SHORTNAME_MAX_LEN + 256];
-	xmmsv_t *value;
+	gboolean ret;
 
-	g_return_val_if_fail (plugin, NULL);
-	g_return_val_if_fail (name, NULL);
-	g_return_val_if_fail (default_value, NULL);
+	g_return_val_if_fail (plugin, FALSE);
+	g_return_val_if_fail (name, FALSE);
+	g_return_val_if_fail (default_value, FALSE);
 
 	g_snprintf (fullpath, sizeof (fullpath), "%s.%s",
 	            xmms_plugin_shortname_get (plugin), name);
 
-	value = xmms_config_register_value (NULL,fullpath, default_value, cb,
+	ret = xmms_config_register_value (NULL,fullpath, default_value, cb,
 	                                     userdata);
-	return value;
+	return ret;
 }
 
 void
@@ -175,7 +175,7 @@ xmms_plugin_config_callback_set (xmms_plugin_t *plugin,
 	g_snprintf (fullpath, sizeof (fullpath), "%s.%s",
 	            xmms_plugin_shortname_get (plugin), name);
 
-	xmms_config_callback_set (fullpath, cb, userdata);
+	xmms_config_callback_set (NULL, fullpath, cb, userdata);
 }
 
 void
@@ -192,7 +192,7 @@ xmms_plugin_config_callback_remove (xmms_plugin_t *plugin,
 	g_snprintf (fullpath, sizeof (fullpath), "%s.%s",
 	            xmms_plugin_shortname_get (plugin), name);
 
-	xmms_config_callback_remove (fullpath, cb, userdata);
+	xmms_config_callback_remove (NULL, fullpath, cb, userdata);
 }
 
 

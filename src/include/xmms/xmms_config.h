@@ -55,10 +55,10 @@ gint32 xmms_config_get_int (xmms_config_t *config, const gchar *path, gboolean *
 gfloat xmms_config_get_float (xmms_config_t *config, const gchar *path, gboolean *ok);
 gchar* xmms_config_get_string (xmms_config_t *config, const gchar *path, gboolean *ok);
 
-xmmsv_t *xmms_config_register_value (xmms_config_t *config, const gchar *path, xmmsv_t *default_value, xmms_object_handler_t cb, gpointer userdata);
+gboolean xmms_config_register_value (xmms_config_t *config, const gchar *path, xmmsv_t *default_value, xmms_object_handler_t cb, gpointer userdata);
 
-void xmms_config_callback_set (const gchar *path, xmms_object_handler_t cb, gpointer userdata);
-void xmms_config_callback_remove (const gchar *path, xmms_object_handler_t cb, gpointer userdata);
+void xmms_config_callback_set (xmms_config_t *config, const gchar *path, xmms_object_handler_t cb, gpointer userdata);
+void xmms_config_callback_remove (xmms_config_t *config, const gchar *path, xmms_object_handler_t cb, gpointer userdata);
 
 G_END_DECLS
 

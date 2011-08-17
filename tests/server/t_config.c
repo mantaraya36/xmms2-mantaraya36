@@ -56,10 +56,8 @@ CASE (test_register)
 	                          XMMSV_LIST_ENTRY_STR ("Yes sir."),
                               XMMSV_LIST_ENTRY_INT (6),
                               XMMSV_LIST_END);
-	value2 = xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL);
-	CU_ASSERT_PTR_NOT_NULL (value2);
+	CU_ASSERT_TRUE (xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL));
 	xmmsv_unref (value);
-	xmmsv_unref (value2);
 
 	value = xmms_config_get (config, "schema_test");
 	CU_ASSERT_PTR_NOT_NULL (value);
@@ -82,10 +80,8 @@ CASE (test_register)
 	                          XMMSV_LIST_ENTRY_STR ("No sir."),
                               XMMSV_LIST_ENTRY_INT (66),
                               XMMSV_LIST_END);
-	value2 = xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL);
-	CU_ASSERT_PTR_NOT_NULL (value2);
+	CU_ASSERT_TRUE (xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL))
 	xmmsv_unref (value);
-	xmmsv_unref (value2);
 
 	value = xmms_config_get (config, "schema_test");
 	CU_ASSERT_PTR_NOT_NULL (value);
@@ -110,28 +106,23 @@ CASE (test_register)
 	                          XMMSV_LIST_ENTRY_INT (90),
 	                          XMMSV_LIST_END);
 
-	value2 = xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL);
-	CU_ASSERT_PTR_NOT_NULL (value2);
+	CU_ASSERT_TRUE (xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL));
 	xmmsv_unref (value);
-	xmmsv_unref (value2);
 
 	/* should also be consistent */
 	value = xmmsv_build_list (XMMSV_LIST_ENTRY_FLOAT (2.5),
 	                          XMMSV_LIST_ENTRY_STR ("No sir."),
 	                          XMMSV_LIST_END);
 
-	value2 = xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL);
-	CU_ASSERT_PTR_NOT_NULL (value2);
+	CU_ASSERT_TRUE (xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL));
 	xmmsv_unref (value);
-	xmmsv_unref (value2);
 
 	/* but this is not consistent */
 	value = xmmsv_build_list (XMMSV_LIST_ENTRY_STR ("No sir."),
 	                          XMMSV_LIST_ENTRY_FLOAT (2.5),
 	                          XMMSV_LIST_END);
 
-	value2 = xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL);
-	CU_ASSERT_PTR_NULL (value2);
+	CU_ASSERT_TRUE (xmms_config_register_value (NULL,  "schema_test", value, NULL, NULL));
 	xmmsv_unref (value);
 }
 

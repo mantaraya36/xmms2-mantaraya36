@@ -405,9 +405,6 @@ xmmsv_free (xmmsv_t *val)
 			val->value.bit.buf = NULL;
 			break;
 	}
-	if (val->obj) {
-		free (val->obj);
-	}
 
 	free (val);
 }

@@ -158,7 +158,7 @@ xmms_xform_plugin_config_lookup_value (xmms_xform_plugin_t *xform_plugin, const 
 	return xmms_plugin_config_lookup_value (plugin, key);
 }
 
-xmmsv_t *
+gboolean
 xmms_xform_plugin_config_register_value (xmms_xform_plugin_t *xform_plugin,
                                          const gchar *name, xmmsv_t *default_value,
                                          xmms_object_handler_t cb, gpointer userdata)
