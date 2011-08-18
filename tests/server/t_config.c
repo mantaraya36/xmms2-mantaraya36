@@ -25,6 +25,12 @@
 
 static xmms_config_t *config;
 
+static void
+callback (xmms_object_t *object, xmmsv_t *data, gpointer userdata)
+{
+	printf ("Callback called\n");
+}
+
 SETUP (config) {
 	xmmsv_t *value;
 	g_thread_init (NULL);
@@ -181,7 +187,7 @@ CASE (test_old_api)
 	xmmsv_unref (val1);
 
 	xmms_config_property_t *prop;
-	prop = xmms_config_property_register ("old_api.test", "10", NULL, NULL);
+	prop = xmms_config_property_register ("old_api.test", "10", callback, NULL);
 	CU_ASSERT_PTR_NOT_NULL (prop);
 	i = xmms_config_property_get_int (prop);
 	CU_ASSERT_EQUAL (i, 10);
@@ -200,13 +206,10 @@ CASE (test_old_api)
 	CU_ASSERT_PTR_NOT_NULL (s2);
 	CU_ASSERT_EQUAL (strcmp (s2, "20"), 0);
 	g_free (s2);
-	xmms_object_unref (prop);
 
 	/* non existent properties */
 	prop = xmms_config_lookup ("I'm not here!");
-	s2 = xmms_config_property_get_string (prop);
-	xmms_object_unref (prop);
-	CU_ASSERT_PTR_NULL (s2);
+	CU_ASSERT_PTR_NULL (prop);
 
 	/* compatibility with new api */
 	val1 = xmms_config_get (config, "old_api.test");

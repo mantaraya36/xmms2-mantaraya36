@@ -70,7 +70,6 @@ static xmmsv_t *xmms_config_path_parent (xmms_config_t *config, const gchar *pat
 gboolean value_is_consistent (xmmsv_t *config_value, xmmsv_t *value);
 gboolean list_is_consistent (xmmsv_t *config_value, xmmsv_t *value);
 gboolean dict_is_consistent (xmmsv_t *config_value, xmmsv_t *value);
-void get_last_config_name (const gchar* path, gchar *last);
 gboolean config_register_path (xmms_config_t *config, const gchar *path);
 gboolean is_digit (const gchar *s);
 gboolean fill_tree_from_values (xmmsv_t *parent_node, const gchar *prefix, GTree *tree);
@@ -79,6 +78,8 @@ gboolean xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmm
 void xmms_config_value_callback_remove (xmmsv_t *value, xmms_object_handler_t cb, gpointer userdata);
 void xmms_config_value_callback_set (xmmsv_t *value, const gchar *path, xmms_object_handler_t cb, gpointer userdata);
 gboolean xmms_config_set_if_not_existent (xmms_config_t *config, const gchar *prefix, xmmsv_t *default_value);
+
+void xmms_configv_unref (xmmsv_t *value);
 
 #include "config_ipc.c"
 
@@ -229,13 +230,16 @@ void
 xmms_config_property_set_data (xmms_config_property_t *prop, const gchar *data)
 {
 	xmms_config_t *config = global_config;
+	gchar *path;
 	xmmsv_t *value;
 
 	g_return_if_fail (prop);
 	g_return_if_fail (data);
 
 	value = xmmsv_new_string (data);
-	xmms_config_set (config, prop->name, value);
+	path = g_strdup (prop->name);
+	xmms_config_set (config, path, value);
+	g_free (path);
 	xmmsv_unref (value);
 }
 
@@ -290,7 +294,7 @@ xmms_config_property_get_int (const xmms_config_property_t *prop)
 gfloat
 xmms_config_property_get_float (const xmms_config_property_t *prop)
 {
-	gint32 f;
+	gfloat f;
 	gboolean ok;
 	xmms_config_t *config = global_config;
 
@@ -315,16 +319,15 @@ xmms_config_property_callback_set (xmms_config_property_t *prop,
                                    xmms_object_handler_t cb,
                                    gpointer userdata)
 {
-	xmmsv_t *value;
 	xmms_config_t *config;
 	g_return_if_fail (prop);
 
 	if (!cb)
 		return;
 
+
 	config = global_config;
-	value = xmms_config_path_data (config, prop->name);
-	xmms_config_value_callback_set (value, prop->name, cb, userdata);
+	xmms_config_callback_set (config, prop->name, cb, userdata);
 }
 
 /**
@@ -444,7 +447,7 @@ xmms_config_set (xmms_config_t *config, const gchar *path, xmmsv_t *value)
 	g_mutex_lock (config->mutex);
 	/* TODO must check if any parent has a callback, to force its call */
 
-	ret = xmms_config_set_unlocked(config, path, value);
+	ret = xmms_config_set_unlocked (config, path, value);
 
 	g_mutex_unlock (config->mutex);
 
@@ -470,6 +473,7 @@ xmms_config_set (xmms_config_t *config, const gchar *path, xmmsv_t *value)
 	if (data && value_set) {
 		obj = (xmms_config_property_t *) xmmsv_get_obj (value_set);
 		if (obj) {
+			/* TODO emit value typed, not cast to string */
 			xmms_object_emit (XMMS_OBJECT (obj),
 			                  XMMS_IPC_SIGNAL_CONFIGVALUE_CHANGED,
 			                  (gpointer) data);
@@ -500,12 +504,13 @@ xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmmsv_t *val
 	xmmsv_t *parent_value, *data_value, *new_val;
 	xmms_config_property_t *obj = NULL;
 	gchar last_name[128];
+	gint len = sizeof (last_name);
 	gboolean ret;
 
 	if (strlen (path) == 0) { /* special case: root dictionary is completely replaced */
 		if (xmmsv_is_type (value, XMMSV_TYPE_DICT)) {
 			if (config->properties_list) {
-				xmmsv_unref (config->properties_list);
+				xmms_configv_unref (config->properties_list);
 			}
 			config->properties_list = xmmsv_copy (value);
 			return TRUE;
@@ -518,35 +523,32 @@ xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmmsv_t *val
 	}
 	parent_value = xmms_config_path_parent (config, path);
 	data_value = xmms_config_path_data (config, path);
-	if (data_value && !xmmsv_is_type (data_value, XMMSV_TYPE_NONE)) {
+	if (data_value) { /* to get object from current value in tree */
 		obj = xmmsv_get_obj (data_value);
-		if (obj) {
-			g_free (obj->name);
-			xmmsv_unref (obj->value);
-			obj->name = g_strdup (path);
-			obj->value = data_value;
-			xmmsv_set_obj (data_value, NULL); /* take ownership of the object */
-		}
+		xmmsv_set_obj (data_value, NULL); /* release ownership */
 	}
-	get_last_config_name (path, last_name);
+	strncpy (last_name, strrchr (path, '.') + 1, len);
 	if (data_value && !value_is_consistent (data_value, value)) {
 		xmms_log_info ("Inconsistent value structure. Old structure replaced.");
 	}
+	new_val = xmmsv_copy (value);
 	if (xmmsv_is_type (parent_value, XMMSV_TYPE_DICT)) {
-		new_val = xmmsv_copy (value);
-		xmmsv_set_obj (new_val, obj);
 		ret = xmmsv_dict_set (parent_value, last_name, new_val);
-		xmmsv_unref (new_val);
+		xmmsv_unref (new_val); /* need to unref as setting in list increases the ref count */
 	} else if (xmmsv_is_type (parent_value, XMMSV_TYPE_LIST)) {
 		gint index = strtol (last_name, NULL, 10);
 		if (index == 0 && strcmp (last_name, "0") != 0) {
 			xmms_log_error ("Invalid index for list node.");
+			xmmsv_unref (new_val);
 			return FALSE;
 		}
-		new_val = xmmsv_copy (value);
+		ret = xmmsv_list_set (parent_value, index, new_val);
+		xmmsv_unref (new_val); /* need to unref as setting in list increases the ref count */
+	}
+	if (obj) {
+		g_assert (strcmp (obj->name, path) == 0);
+		obj->value = new_val;
 		xmmsv_set_obj (new_val, obj);
-		ret = xmmsv_list_insert (parent_value, index, new_val);
-		xmmsv_unref (new_val);
 	}
 	return ret;
 }
@@ -665,7 +667,11 @@ xmms_config_get_float (xmms_config_t *config, const gchar *path, gboolean *ok)
 		*ok = xmmsv_get_float (value, &f);
 		if (!*ok) {
 			*ok = xmmsv_get_string (value, &s);
-			f = strtod (s, NULL);
+			if (*ok) {
+				f = strtod (s, NULL);
+			} else {
+				f = 0.0; /* give up */
+			}
 		}
 		xmmsv_unref (value);
 	}
@@ -731,7 +737,7 @@ xmms_config_register_value (xmms_config_t *config,
 		config = global_config;
 	}
 
-	value = xmms_config_get (config, path);
+	value = xmms_config_path_data (config, path);
 
 	if (!value) {
 		new_value = default_value;
@@ -740,20 +746,14 @@ xmms_config_register_value (xmms_config_t *config,
 		if (value_is_consistent (value, default_value)) {
 			ret = xmms_config_set_if_not_existent (config, path, default_value);
 			new_value = xmms_config_path_data (config, path);
-			xmmsv_unref (value);
 		} else {
-			xmmsv_unref (value);
-			value = xmmsv_new_none ();
-			xmms_config_set (config, path, value);
-			xmmsv_unref (value);
 			ret = xmms_config_set (config, path, default_value);
 			new_value = default_value;
-			xmms_log_info ("Inconsistent value struct. Replaced wiht new one");
 		}
 	}
 
 	if (cb) {
-		xmms_config_value_callback_set (new_value, path, cb, userdata);
+		xmms_config_callback_set (config, path, cb, userdata);
 	}
 
 	return ret;
@@ -816,10 +816,10 @@ xmms_config_value_callback_set (xmmsv_t *value,
 		return;
 	obj = (xmms_config_property_t *) xmmsv_get_obj (value);
 	if (!obj) {
+		/* TODO this must be freed, in this file not inside xmmsv_t */
 		obj = xmms_object_new (xmms_config_property_t, xmms_config_property_destroy);
 		obj->name = g_strdup (path);
 		obj->value = value;
-		xmmsv_ref (value);
 		xmmsv_set_obj (value, obj);
 	}
 	xmms_object_connect (XMMS_OBJECT (obj),
@@ -909,6 +909,19 @@ xmms_config_set_if_not_existent (xmms_config_t *config,
 	}
 
 	return ret;
+}
+
+void
+xmms_configv_unref (xmmsv_t *value)
+{
+	g_return_if_fail (value);
+	xmms_object_t *obj;
+	/* FIXME get inside the values and free the objects */
+	obj = xmmsv_get_obj (value);
+	if (obj) {
+		xmms_object_unref (obj);
+	}
+	xmmsv_unref (value);
 }
 
 /**
@@ -1156,7 +1169,7 @@ xmms_config_client_set_value (xmms_config_t *conf,
 		case XMMSV_TYPE_LIST:
 			values = g_strsplit (value, ",", 0);
 			num = g_strv_length (values);
-			new_list = xmmsv_new_list();
+			new_list = xmmsv_new_list ();
 			for (i = 0; i < num; i++) {
 				if (xmmsv_list_get (prop_value, i, &member)) {
 					switch (xmmsv_get_type (member)) {
@@ -1199,7 +1212,7 @@ xmms_config_client_set_value (xmms_config_t *conf,
 		xmms_error_set (err, XMMS_ERROR_NOENT,
 		                "Trying to set non-existent config property");
 	}
-	g_strfreev(values);
+	g_strfreev (values);
 }
 
 gboolean
@@ -1319,7 +1332,7 @@ static void
 clear_config (xmms_config_t *config)
 {
 	xmmsv_unref (config->properties_list);
-	config->properties_list = xmmsv_new_dict();
+	config->properties_list = xmmsv_new_dict ();
 
 	config->version = XMMS_CONFIG_VERSION;
 
@@ -1603,8 +1616,6 @@ xmms_config_property_destroy (xmms_object_t *object)
 	xmms_config_property_t *prop = (xmms_config_property_t *) object;
 
 	g_free (prop->name);
-	xmmsv_unref (prop->value);
-
 }
 
 /**
@@ -1630,7 +1641,7 @@ xmms_config_client_register_value (xmms_config_t *config,
 xmmsv_t *
 xmms_config_path_data (xmms_config_t *config, const gchar *path)
 {
-	xmmsv_t *out_val, *val1, *val2;
+	xmmsv_t *out_val = NULL, *val1, *val2;
 	gchar **node_names;
 	gint i;
 	gboolean found;
@@ -1829,23 +1840,6 @@ dict_is_consistent (xmmsv_t *config_value, xmmsv_t *value)
 	return TRUE;
 }
 
-void
-get_last_config_name (const gchar* path, gchar *last)
-{
-	gchar **parts;
-	gint i;
-
-	g_assert (path);
-	parts = g_strsplit (path, ".", -1);
-	i = 0;
-	g_assert (parts[0]);
-	while (parts[i+1]) {
-		i++;
-	}
-	strcpy (last, parts[i]);
-	g_strfreev (parts);
-}
-
 gboolean
 config_register_path (xmms_config_t *config, const gchar *path)
 {
@@ -1888,14 +1882,17 @@ config_register_path (xmms_config_t *config, const gchar *path)
 			}
 			if (xmmsv_is_type (parent_value, XMMSV_TYPE_LIST)) {
 				gint index = strtol (parts[i], NULL, 10);
-				while (xmmsv_list_get_size (parent_value) <= index) {
-					xmmsv_list_append (parent_value, child_value);
+				while (xmmsv_list_get_size (parent_value) <= index) { /* fill up list to necessary size with copies of the same */
+					xmmsv_t *new_item = xmmsv_copy (child_value);
+					xmmsv_list_append (parent_value, new_item);
+					xmmsv_unref (new_item);
 				}
 				ret = xmmsv_list_set (parent_value, index, child_value);
+				xmmsv_unref (child_value);
 			} else if (xmmsv_is_type (parent_value, XMMSV_TYPE_DICT)) {
 				ret = xmmsv_dict_set (parent_value, parts[i], child_value);
+				xmmsv_unref (child_value);
 			}
-			xmmsv_unref (child_value);
 		}
 		parent_value = child_value;
 		if (i < numparts - 1) {
