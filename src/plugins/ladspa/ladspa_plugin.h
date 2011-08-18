@@ -30,6 +30,7 @@ typedef enum {
 
 struct ladspa_plugin_node_St {
     const LADSPA_Descriptor *plugin;
+	gchar *pluginstring;
 	gint num_instances;
 	LADSPA_Mode mode;
 	float balance; /* Used only for mode LADSPA_BALANCE */
@@ -51,3 +52,6 @@ void ladspa_plugin_free_node (ladspa_plugin_node_t *node);
 
 LADSPA_Data ladspa_plugin_get_default_value (const LADSPA_PortRangeHint * PortRangeHints,
                                              gint port_num);
+
+
+gint ladspa_plugin_get_index_for_parameter (ladspa_plugin_node_t *plugin, const gchar *param_name);

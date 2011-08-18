@@ -37,6 +37,7 @@ struct ladspa_data_St {
 	gfloat **out_bufs;
     ladspa_plugin_node_t *plugin_list;
 	GMutex * mutex; /* to lock the plugin_list while it is being modified from a config call */
+	xmms_xform_t *xform;
 };
 
 typedef struct ladspa_data_St ladspa_data_t;
@@ -60,10 +61,14 @@ void interleave (gfloat **out_bufs, xmms_sample_t *buf,
                  gint buf_size, gint chans, gint fmt);
 void process_plugin_node (ladspa_plugin_node_t *plugin_node, ladspa_data_t *priv,
                           gint buf_size);
-void clean_unused_control_properties (gint num_ctl_ports);
-void set_control_property (ladspa_data_t *priv, ladspa_plugin_node_t *node,
-                           gint ctl_num,  const char* port_name,
-                           LADSPA_Data default_value);
+void clean_control_properties (gint plugin_index, const gchar *plugin_name,
+                               ladspa_data_t *priv);
+void register_control_property (ladspa_data_t *priv, ladspa_plugin_node_t *node,
+                                gint ctl_num,  const char* port_name,
+                                LADSPA_Data default_value);
+
+void connect_param_callbacks (ladspa_data_t *priv);
+void disconnect_param_callbacks (ladspa_data_t *priv);
 
 XMMS_XFORM_PLUGIN ("ladspa",
                    "LADSPA Plugin Host",
@@ -86,9 +91,14 @@ xmms_ladspa_plugin_setup (xmms_xform_plugin_t *xform_plugin)
 
 	xmms_xform_plugin_methods_set (xform_plugin, &methods);
 	/* TODO allow multiple plugins */
-	value = xmmsv_new_string ("");
+	value = xmmsv_build_list (XMMSV_LIST_ENTRY_STR (""),
+	                          XMMSV_LIST_END);
 	xmms_xform_plugin_config_register_value (xform_plugin, "plugin", value,
 	                                          NULL, NULL);
+	xmmsv_unref (value);
+	value = xmmsv_new_dict ();
+	xmms_xform_plugin_config_register_value (xform_plugin, "control.0", value,
+	                                         NULL, NULL);
 
 	xmms_xform_plugin_indata_add (xform_plugin,
 	                              XMMS_STREAM_TYPE_MIMETYPE,
@@ -112,14 +122,11 @@ xmms_ladspa_plugin_setup (xmms_xform_plugin_t *xform_plugin)
 static gboolean
 xmms_ladspa_init (xmms_xform_t *xform)
 {
-	xmms_config_property_t *config;
 	ladspa_data_t *priv;
-	const gchar *plugin;
+	const gchar *plugin, *enabled;
 	gint srate, num_channels, fmt;
 	guint buf_size;
-	gint i;
-	gchar *value_property_name;
-	xmmsv_t *value;
+	xmmsv_t *value, *plugin_list;
 
 	g_return_val_if_fail (xform, FALSE);
 
@@ -128,6 +135,7 @@ xmms_ladspa_init (xmms_xform_t *xform)
 
 	priv->mutex = g_mutex_new ();
 	priv->plugin_list = NULL;
+	priv->xform = xform;
 
 	xmms_xform_private_data_set (xform, priv);
 	xmms_xform_outdata_type_copy (xform);
@@ -147,41 +155,26 @@ xmms_ladspa_init (xmms_xform_t *xform)
 	xmms_xform_config_callback_set (xform, "enabled", ladspa_config_changed, priv);
 	value = xmms_xform_config_lookup_value (xform, "enabled");
 	g_return_val_if_fail (value, FALSE);
-	xmmsv_get_int (value, &(priv->enabled));
-	priv->enabled = !! priv->enabled;
+	xmmsv_get_string (value, &enabled);
+	priv->enabled = enabled[0] != '0';
 	xmmsv_unref (value);
 
-	xmms_xform_config_callback_set (xform, "plugin", ladspa_config_changed, priv);
-	value = xmms_xform_config_lookup_value (xform, "plugin");
-	g_return_val_if_fail (value, FALSE);
 	/* TODO allow multiple plugins */
+	/* maybe set callback only once on root node and let xmmsv call it for all children nodes? */
+	xmms_xform_config_callback_set (xform, "plugin.0", ladspa_config_changed, priv);
+	plugin_list = xmms_xform_config_lookup_value (xform, "plugin");
+	g_return_val_if_fail (value, FALSE);
+	xmmsv_list_get (plugin_list, 0, &value);
 	xmmsv_get_string (value, &plugin);
 
+	disconnect_param_callbacks (priv);
 	if (!ladspa_init_plugin (priv, plugin)) {
 		xmms_log_error ("Plugin init error");
 	}
-	xmmsv_unref (value);
+	clean_control_properties (0, plugin, priv);
+	connect_param_callbacks (priv);
+	xmmsv_unref (plugin_list);
 
-	i = 0;
-	value_property_name = g_strdup_printf ("ladspa.control.%i",
-	                                       i, NULL);
-	config = xmms_config_lookup (value_property_name);
-	while (config) {
-		/* This is a bit of a kludge since the xmms2 config system was not designed
-		   for mutable properties. The idea is to set the callbacks for all existing
-		   properties here, so they are set only once and set whenever a new
-		   property has to be defined because the plugin has more properties than
-		   the ones currently available.
-		*/
-		xmms_config_property_callback_set (config, ladspa_config_changed, priv);
-		g_free (value_property_name);
-		i++;
-		value_property_name = g_strdup_printf ("ladspa.control.%i",
-		                                       i, NULL);
-		config = xmms_config_lookup (value_property_name);
-	}
-
-	g_free (value_property_name);
 	return TRUE;
 }
 
@@ -192,8 +185,6 @@ xmms_ladspa_destroy (xmms_xform_t *xform)
 	xmms_config_property_t *config;
 	ladspa_plugin_node_t *old_node;
 	ladspa_plugin_node_t *plugin_node;
-	gint i;
-	gchar *value_property_name;
 
 	g_return_if_fail (xform);
 
@@ -214,24 +205,7 @@ xmms_ladspa_destroy (xmms_xform_t *xform)
 	config = xmms_xform_config_lookup (xform, "plugin");
 	xmms_config_property_callback_remove (config, ladspa_config_changed, priv);
 
-	i = 0;
-	value_property_name = g_strdup_printf ("ladspa.control.%i",
-	                                       i, NULL);
-	config = xmms_config_lookup (value_property_name);
-	while (config) {
-		/* This is a bit of a kludge since the xmms2 config system was not designed
-		   for mutable properties. The idea is to set the callbacks for all existing
-		   properties here, so they are set only once and set whenever a new
-		   property has to be defined because the plugin has more properties than
-		   the ones currently available.
-		*/
-		xmms_config_property_callback_remove (config, ladspa_config_changed, priv);
-		g_free (value_property_name);
-		i++;
-		value_property_name = g_strdup_printf ("ladspa.control.%i",
-		                                       i, NULL);
-		config = xmms_config_lookup (value_property_name);
-	}
+	disconnect_param_callbacks (priv);
 
 	xmms_ladspa_free_buffers (priv);
 	g_mutex_unlock (priv->mutex);
@@ -463,33 +437,42 @@ ladspa_config_changed (xmms_object_t *object, xmmsv_t *data, gpointer userdata)
 	ladspa_data_t *priv = (ladspa_data_t *) userdata;
 	const gchar *name, *str_value;
 	gfloat value;
-	gulong control_index;
+	gint plugin_index, control_index;
 	ladspa_plugin_node_t *node, *old_node;
 
 	name = xmms_config_property_get_name ((xmms_config_property_t *) object);
 	value = xmms_config_property_get_float ((xmms_config_property_t *) object);
 	str_value = xmms_config_property_get_string ((xmms_config_property_t *) object);
 
-	if (!g_ascii_strcasecmp (name, "ladspa.plugin")) {
+	/* TODO allow multiple plugins */
+	if (!g_ascii_strcasecmp (name, "ladspa.plugin.0")) {
 		node = ladspa_plugin_new_node (str_value, priv->num_channels, priv->buf_size, priv->srate);
-
 		g_mutex_lock (priv->mutex);
 
 		old_node = priv->plugin_list;
+		/* TODO allow multiple plugin */
 		priv->plugin_list = node;
+		disconnect_param_callbacks (priv);
 		ladspa_init_node (priv, node);
-
 		g_mutex_unlock (priv->mutex);
+		clean_control_properties (0, str_value, priv);
+		connect_param_callbacks (priv);
 		if (old_node) {
 			ladspa_plugin_free_node (old_node);
 		}
 	} else if (g_str_has_prefix (name, "ladspa.control.") ) {
 		if (priv->plugin_list) {
-			control_index = (gulong) g_ascii_strtoull (name+15, NULL, 10); /* Is there a better way to find this number? */
-			if (control_index < priv->plugin_list->num_ctl_in_ports) {
-				*(priv->plugin_list->ctl_in_ports[control_index]) = value;
+			gchar *param_name;
+			plugin_index = (gint) strtol (strrchr(name, '.'), NULL, 10);
+			param_name = strrchr (name, '.') + 1;
+			control_index = ladspa_plugin_get_index_for_parameter (&(priv->plugin_list[plugin_index]), param_name);
+			if (control_index > -1 && control_index < priv->plugin_list->num_ctl_in_ports) {
+				*(priv->plugin_list[plugin_index].ctl_in_ports[control_index]) = value;
 			}
 		}
+	} else if (!strcmp (name, "ladspa.enabled")) {
+		gint int_value = xmms_config_property_get_int ((xmms_config_property_t *) object);
+		priv->enabled = !!int_value;
 	}
 
 	/* TODO validate ladspa plugin parameters with:
@@ -535,7 +518,6 @@ ladspa_init_node (ladspa_data_t *priv,
 	guint i, inst;
 
 	if (!node->plugin || node->num_out_channels == 0) {
-		clean_unused_control_properties (0);
 		return;
 	}
 	descriptor = node->plugin;
@@ -543,13 +525,12 @@ ladspa_init_node (ladspa_data_t *priv,
 	PortNames = descriptor->PortNames;
 	PortRangeHints = descriptor->PortRangeHints;
 
-	clean_unused_control_properties (node->num_ctl_in_ports);
 	ctl_in_port_count = 0;
 	for (i = 0; i < descriptor->PortCount; i++) {
 		if (LADSPA_IS_PORT_CONTROL (PortDescriptors[i])) {
 			default_value = ladspa_plugin_get_default_value (PortRangeHints, i);
-			set_control_property (priv, node, ctl_in_port_count,
-			                      PortNames[i], default_value);
+			register_control_property (priv, node, ctl_in_port_count,
+			                           PortNames[i], default_value);
 			ctl_in_port_count++;
 		}
 	}
@@ -617,70 +598,147 @@ ladspa_init_node (ladspa_data_t *priv,
 }
 
 void
-clean_unused_control_properties (gint num_ctl_ports)
+clean_control_properties (gint plugin_index, const gchar *plugin_name,
+                          ladspa_data_t *priv)
 {
-	gint i = num_ctl_ports;
-	gchar *value_property_name, *name_property_name;
-	xmms_config_property_t *property;
+	gchar *path;
+	xmmsv_t *value, *control_list;
 
-	name_property_name = g_strdup_printf ("ladspa.controlname.%i",
-	                                      i, NULL);
-	value_property_name = g_strdup_printf ("ladspa.control.%i",
-	                                      i, NULL);
-	property = xmms_config_lookup (name_property_name);
-	g_free (name_property_name);
-	while (property) {
-		xmms_config_property_set_data (property, "");
-		property = xmms_config_lookup (value_property_name);
-		xmms_config_property_set_data (property, ""); /* clear both name and value */
-		i++;
-		name_property_name = g_strdup_printf ("ladspa.controlname.%i",
-		                                      i, NULL);
-		property = xmms_config_lookup (name_property_name);
-		g_free (name_property_name);
+	/* first check if config paths are sane */
+	value = xmms_xform_config_lookup_value (priv->xform, "control");
+	if (!value || !xmmsv_is_type (value, XMMSV_TYPE_LIST)) {
+		control_list = xmmsv_new_list ();
+		while (xmmsv_list_get_size (control_list) < plugin_index) {
+			xmmsv_list_append (control_list, xmmsv_new_dict ());
+		}
+		xmms_xform_config_set_value (priv->xform, "control", control_list);
+		xmmsv_unref (control_list);
+	}
+	if (value) {
+		xmmsv_unref (value);
+	}
+
+	/* clean control properties only if plugin name does not match and previous plugin is not empty */
+	if (priv->plugin_list) {
+		xmmsv_dict_iter_t *it;
+		ladspa_plugin_node_t *plugin_node = &(priv->plugin_list[plugin_index]);
+		path = g_strdup_printf ("control.%i", plugin_index);
+		value = xmms_xform_config_lookup_value (priv->xform, path);
+		xmmsv_get_dict_iter (value, &it);
+		while (xmmsv_dict_iter_valid (it)) {
+			const gchar *key;
+			xmmsv_t *dummy_val;
+			xmmsv_dict_iter_pair (it, &key, &dummy_val);
+			if (ladspa_plugin_get_index_for_parameter (plugin_node, key) < 0) {
+				xmmsv_dict_iter_remove (it);
+			} else {
+				xmmsv_dict_iter_next (it);
+			}
+		}
+		xmms_xform_config_set_value (priv->xform, path, value);
 	}
 }
 
 void
-set_control_property (ladspa_data_t *priv, ladspa_plugin_node_t *node,
-                      gint ctl_num, const char* port_name,
-                      LADSPA_Data default_value)
+register_control_property (ladspa_data_t *priv, ladspa_plugin_node_t *node,
+                           gint ctl_num, const char* port_name,
+                           LADSPA_Data default_value)
 {
-	gchar *default_value_str, *value_property_name, *name_property_name;
-	xmms_config_property_t *property, *property_name;
+	gchar *property_path;
+	xmmsv_t *value, *control_dict;
+	gfloat ctl_value;
+	gboolean ok;
+	gint index = 0;
 
-	default_value_str = g_strdup_printf ("%.6f", default_value);
-	value_property_name = g_strdup_printf ("ladspa.control.%i",
-	                                       ctl_num, NULL);
-	name_property_name = g_strdup_printf ("ladspa.controlname.%i",
-	                                      ctl_num, NULL);
-	property = xmms_config_lookup (value_property_name);
-	property_name = xmms_config_lookup (name_property_name);
-	if (!property || !property_name) {
-		property = xmms_config_property_register (value_property_name,
-		                                          default_value_str,
-		                                          NULL, NULL);
-		xmms_config_property_set_data (property, default_value_str);
-		property_name = xmms_config_property_register (name_property_name,
-		                                               port_name,
-		                                               NULL, NULL);
-		xmms_config_property_callback_set (property, ladspa_config_changed, priv);
+	value = xmms_xform_config_lookup_value (priv->xform, "control");
+	xmmsv_list_get (value, index, &control_dict);
+	property_path = g_strdup_printf ("control.%i.%s", index, port_name);
+	if (!xmmsv_dict_has_key (control_dict, port_name)) {
+		xmmsv_dict_set_float (control_dict, port_name, default_value);
 		/* Pass the default value to the plugin */
 		g_assert (ctl_num < node->num_ctl_in_ports);
 		*(node->ctl_in_ports[ctl_num]) = default_value;
-	} else { /* If property exists check if it matches and don't set default */
-		const gchar *name = xmms_config_property_get_string (property_name);
-		g_assert (ctl_num < node->num_ctl_in_ports);
-		if (g_strcmp0 (port_name, name) != 0) { /* only set value if name does not match, to keep old value */
-			xmms_config_property_set_data (property, default_value_str);
-			*(node->ctl_in_ports[ctl_num]) = default_value;
-		} else {
-			gfloat value = xmms_config_property_get_float (property);
-			*(node->ctl_in_ports[ctl_num]) = value;
-		}
+		/* TODO this whole function is very inefficient now! move to a better place */
+		xmms_config_set (NULL, "ladspa.control.0", control_dict);
+		xmms_xform_config_callback_set (priv->xform, property_path,
+		                                ladspa_config_changed, priv);
 	}
-	xmms_config_property_set_data (property_name, port_name);
-	g_free (default_value_str);
-	g_free (value_property_name);
-	g_free (name_property_name);
+	if (value) {
+		xmmsv_unref (value);
+	}
+
+	value = xmms_xform_config_lookup_value (priv->xform, property_path);
+	ok = xmmsv_get_float (value, &ctl_value);
+	if (ok) {
+		*(node->ctl_in_ports[ctl_num]) = ctl_value;
+	}
+	if (value) {
+		xmmsv_unref (value);
+	}
+}
+
+void
+connect_param_callbacks (ladspa_data_t *priv)
+{
+	gint num_plugins, i, j;
+
+	/* TODO allow multiple plugins */
+	num_plugins = 1;
+	for (i = 0; i < num_plugins; i++) {
+		xmmsv_t *plugin_ctls;
+		char *ctl_path, *ctl_path2;
+		const char *ctl_name;
+		xmmsv_dict_iter_t *it;
+		ctl_path = g_strdup_printf ("control.%i", i);
+		plugin_ctls = xmms_xform_config_lookup_value (priv->xform, ctl_path);
+		if (!xmmsv_is_type (plugin_ctls, XMMSV_TYPE_DICT)) {
+			continue;
+		}
+		xmmsv_get_dict_iter (plugin_ctls, &it);
+		j = 0;
+		while (xmmsv_dict_iter_valid (it)) {
+			xmmsv_t *dummy_val;
+			if (xmmsv_dict_iter_pair (it, &ctl_name, &dummy_val)) {
+				ctl_path2 = g_strdup_printf ("%s.%s", ctl_path, ctl_name);
+				xmms_xform_config_callback_set (priv->xform, ctl_path2, ladspa_config_changed, priv);
+			}
+			xmmsv_dict_iter_next (it);
+			g_free (ctl_path2);
+			j++;
+		}
+		g_free (ctl_path);
+	}
+}
+
+void
+disconnect_param_callbacks (ladspa_data_t *priv)
+{
+	gint num_plugins, i, j;
+
+	/* TODO allow multiple plugins */
+	num_plugins = 1;
+	for (i = 0; i < num_plugins; i++) {
+		xmmsv_t *plugin_ctls;
+		char *ctl_path, *ctl_path2;
+		const char *ctl_name;
+		xmmsv_dict_iter_t *it;
+		ctl_path = g_strdup_printf ("control.%i", i);
+		plugin_ctls = xmms_xform_config_lookup_value (priv->xform, ctl_path);
+		if (!xmmsv_is_type (plugin_ctls, XMMSV_TYPE_DICT)) {
+			continue;
+		}
+		xmmsv_get_dict_iter (plugin_ctls, &it);
+		j = 0;
+		while (xmmsv_dict_iter_valid (it)) {
+			xmmsv_t *dummy_val;
+			if (xmmsv_dict_iter_pair (it, &ctl_name, &dummy_val)) {
+				ctl_path2 = g_strdup_printf ("%s.%s", ctl_path, ctl_name);
+				xmms_xform_config_callback_remove (priv->xform, ctl_path2, ladspa_config_changed, priv);
+			}
+			xmmsv_dict_iter_next (it);
+			g_free (ctl_path2);
+			j++;
+		}
+		g_free (ctl_path);
+	}
 }

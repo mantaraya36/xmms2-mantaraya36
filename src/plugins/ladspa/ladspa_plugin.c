@@ -166,6 +166,7 @@ ladspa_plugin_new_node (const gchar *plugin, gint num_channels, guint buf_size, 
 	node->next = NULL;
 	node->plugin = descriptor;
 	node->mode = LADSPA_NONE; /* default to off */
+	node->pluginstring = g_strdup (plugin);
 
 	if (!descriptor) {
 		return node;
@@ -276,6 +277,8 @@ ladspa_plugin_free_node (ladspa_plugin_node_t *plugin_node)
 		g_free (plugin_node->ctl_in_ports[i]);
 	}
 	g_free (plugin_node->ctl_in_ports);
+	g_free (plugin_node->pluginstring);
+
 	plugin_node->ctl_in_ports = NULL;
 	g_free (plugin_node);
 }
@@ -345,4 +348,25 @@ ladspa_plugin_num_ports (const LADSPA_Descriptor *descriptor,
 		}
 	}
 	return count;
+}
+
+gint
+ladspa_plugin_get_index_for_parameter (ladspa_plugin_node_t *plugin, const gchar *param_name)
+{
+	gint i;
+	const LADSPA_Descriptor *descriptor = plugin->plugin;
+
+	g_return_val_if_fail (plugin, -1);
+	g_return_val_if_fail (param_name, -1);
+
+	for (i = 0; i < descriptor->PortCount; i++) {
+		if (LADSPA_IS_PORT_CONTROL (descriptor->PortDescriptors[i])
+		        || LADSPA_IS_PORT_INPUT (descriptor->PortDescriptors[i])) {
+			if (g_strcmp0 (descriptor->PortNames[i], param_name) == 0) {
+				return i;
+
+			}
+		}
+	}
+	return -1;
 }
