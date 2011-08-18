@@ -60,7 +60,7 @@ xmms_config_property_t *xmms_plugin_config_lookup (xmms_plugin_t *plugin, const 
 xmms_config_property_t *xmms_plugin_config_property_register (xmms_plugin_t *plugin, const gchar *name, const gchar *default_value, xmms_object_handler_t cb, gpointer userdata);
 
 xmmsv_t *xmms_plugin_config_lookup_value (xmms_plugin_t *plugin, const gchar *key);
-
+gboolean xmms_plugin_config_set_value (xmms_plugin_t * plugin, const gchar *key, xmmsv_t *value);
 gboolean xmms_plugin_config_register_value (xmms_plugin_t *plugin,const gchar *name, xmmsv_t *default_value, xmms_object_handler_t cb, gpointer userdata);
 void xmms_plugin_config_callback_set (xmms_plugin_t *plugin, const gchar *name, xmms_object_handler_t cb, gpointer userdata);
 void xmms_plugin_config_callback_remove (xmms_plugin_t *plugin, const gchar *name, xmms_object_handler_t cb, gpointer userdata);

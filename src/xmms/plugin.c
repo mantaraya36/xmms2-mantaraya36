@@ -140,6 +140,24 @@ xmms_plugin_config_lookup_value (xmms_plugin_t *plugin, const gchar *key)
 }
 
 gboolean
+xmms_plugin_config_set_value (xmms_plugin_t * plugin, const gchar *key,
+                              xmmsv_t *value)
+{
+	gchar path[XMMS_PLUGIN_SHORTNAME_MAX_LEN + 256];
+	gboolean ret;
+
+	g_return_val_if_fail (plugin, NULL);
+	g_return_val_if_fail (key, NULL);
+
+	g_snprintf (path, sizeof (path), "%s.%s",
+	            xmms_plugin_shortname_get (plugin), key);
+	ret = xmms_config_set (NULL, path, value);
+
+	return ret;
+
+}
+
+gboolean
 xmms_plugin_config_register_value (xmms_plugin_t *plugin,
                                    const gchar *name,
                                    xmmsv_t *default_value,

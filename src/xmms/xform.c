@@ -1467,6 +1467,16 @@ xmms_xform_config_lookup_value (xmms_xform_t *xform,
 
 }
 
+gboolean
+xmms_xform_config_set_value (xmms_xform_t *xform,
+                             const gchar *path,
+                             xmmsv_t * value)
+{
+	g_return_val_if_fail (xform->plugin, FALSE);
+
+	return xmms_plugin_config_set_value ((xmms_plugin_t *) xform->plugin, path, value);
+}
+
 void
 xmms_xform_config_callback_set (xmms_xform_t *xform,
                                 const gchar *path,
