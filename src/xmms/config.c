@@ -1224,7 +1224,7 @@ xmms_config_client_set_value (xmms_config_t *conf,
                               xmms_error_t *err)
 {
 	xmmsv_t *prop_value, *member, *new_list;
-	gchar **values;
+	gchar **values = NULL;
 	guint num;
 	gint32 i;
 	gfloat f;
@@ -1257,6 +1257,9 @@ xmms_config_client_set_value (xmms_config_t *conf,
 					}
 				}
 				xmms_config_set (conf, key, new_list);
+				if (values) {
+					g_strfreev (values);
+				}
 			}
 			break;
 		case XMMSV_TYPE_INT32:
@@ -1278,7 +1281,6 @@ xmms_config_client_set_value (xmms_config_t *conf,
 		xmms_error_set (err, XMMS_ERROR_NOENT,
 		                "Trying to set non-existent config property");
 	}
-	g_strfreev (values);
 }
 
 gboolean
