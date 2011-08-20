@@ -51,7 +51,7 @@ xmms_schema_validate (xmmsv_t *schema, xmmsv_t *value, char **error_path)
 	schema_type = (xmms_schema_type_t) i;
 	value_type = xmmsv_get_type (value);
 
-	if (schema_type == XMMS_SCHEMA_ANY) {
+	if (!schema || schema_type == XMMS_SCHEMA_ANY) {
 		return 1;
 	}
 	if (schema_type == XMMS_SCHEMA_UNION) {
@@ -109,6 +109,9 @@ xmmsv_t *xmms_schema_get_subschema (xmmsv_t *schema, const char *path)
 	xmms_schema_type_t parent_node_type, node_type = XMMS_SCHEMA_ANY;
 	int32_t i;
 
+	if (!schema) {
+		return 0;
+	}
 	child = schema;
 	strncpy (node_path, path, sizeof (node_path));
 	node_name = strtok (node_path,".");

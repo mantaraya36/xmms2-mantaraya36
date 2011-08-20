@@ -27,6 +27,7 @@
 
 #include "xmmsc/xmmsc_idnumbers.h"
 #include "xmmsc/xmmsv.h"
+#include "xmmsc/xmmsc_schema.h"
 #include "xmmspriv/xmms_config.h"
 #include "xmmspriv/xmms_utils.h"
 #include "xmms/xmms_ipc.h"
@@ -103,6 +104,7 @@ struct xmms_config_St {
 
 	const gchar *filename;
 	xmmsv_t *properties_list;
+	GTree *schemas;
 
 	/* Lock on globals are great! */
 	GMutex *mutex;
@@ -431,12 +433,12 @@ gboolean
 xmms_config_set (xmms_config_t *config, const gchar *path, xmmsv_t *value)
 {
 	gboolean ret;
-	gchar *data = NULL;
+	gchar *data = NULL, *path_root;
 	const gchar *s;
 	gint32 i;
 	gfloat f;
 	GTree *dict;
-	xmmsv_t *value_set;
+	xmmsv_t *value_set, *schema, *subschema;
 	xmms_config_property_t *obj;
 
 	if (!config) {
@@ -444,6 +446,15 @@ xmms_config_set (xmms_config_t *config, const gchar *path, xmmsv_t *value)
 	}
 
 	g_return_val_if_fail (path, FALSE);
+
+	path_root = g_strndup (path, strcspn (path, "."));
+	schema = (xmmsv_t *) g_tree_lookup (config->schemas, path_root);
+	subschema = xmms_schema_get_subschema (schema, path);
+	g_free (path_root);
+
+	if (!xmms_schema_validate (subschema, value, NULL)) {
+		return FALSE;
+	}
 	g_mutex_lock (config->mutex);
 	/* TODO must check if any parent has a callback, to force its call */
 
@@ -477,7 +488,6 @@ xmms_config_set (xmms_config_t *config, const gchar *path, xmmsv_t *value)
 			xmms_object_emit (XMMS_OBJECT (obj),
 			                  XMMS_IPC_SIGNAL_CONFIGVALUE_CHANGED,
 			                  (gpointer) data);
-
 			dict = g_tree_new_full (compare_key, NULL,
 			                        NULL, (GDestroyNotify) xmmsv_unref);
 			g_tree_insert (dict, (gchar *) path,
@@ -505,6 +515,7 @@ xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmmsv_t *val
 	xmms_config_property_t *obj = NULL;
 	gchar last_name[128];
 	gint len = sizeof (last_name);
+	const gchar *lastdot;
 	gboolean ret;
 
 	if (strlen (path) == 0) { /* special case: root dictionary is completely replaced */
@@ -527,7 +538,12 @@ xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmmsv_t *val
 		obj = xmmsv_get_obj (data_value);
 		xmmsv_set_obj (data_value, NULL); /* release ownership */
 	}
-	strncpy (last_name, strrchr (path, '.') + 1, len);
+	lastdot = strrchr (path, '.');
+	if (lastdot) {
+		strncpy (last_name, lastdot + 1, len);
+	} else {
+		strncpy (last_name, path, len);
+	}
 	if (data_value && !value_is_consistent (data_value, value)) {
 		xmms_log_info ("Inconsistent value structure. Old structure replaced.");
 	}
@@ -725,10 +741,10 @@ gchar* xmms_config_get_string (xmms_config_t *config, const gchar *path, gboolea
  */
 gboolean
 xmms_config_register_value (xmms_config_t *config,
-                             const gchar *path,
-                             xmmsv_t *default_value,
-                             xmms_object_handler_t cb,
-                             gpointer userdata)
+                            const gchar *path,
+                            xmmsv_t *default_value,
+                            xmms_object_handler_t cb,
+                            gpointer userdata)
 {
 	xmmsv_t *value, *new_value = NULL;
 	gboolean ret;
@@ -805,6 +821,56 @@ xmms_config_callback_remove (xmms_config_t *config,
 	xmms_config_value_callback_remove (value, cb, userdata);
 }
 
+/**
+ * Set schema for configuration node for validation and information when
+ * setting properties. A schema can only be registered for nodes belonging to the
+ * root dicitionary of the config tree. Only one schema can be registered per
+ * node, so if a schema is already registered, it will be replaced by the new one.
+ * @param prop The config property
+ * @param key The name of the node to assign the schema to
+ * @param schema The schema
+ * @return true is the schema was registered successfully
+ */
+gboolean
+xmms_config_register_schema (xmms_config_t *config, const gchar *key, xmmsv_t *value)
+{
+	gboolean ret;
+	/* TODO make this function append schemas to existing tree allowing any path
+	  and possibily have a clear_schema function as well */
+
+	if (strchr (key, '.')) {
+		xmms_log_error ("Can only set root schemas.");
+		return FALSE;
+	}
+
+	ret = TRUE;
+	g_tree_insert (config->schemas, strdup (key), (gpointer) value);
+	return ret;
+}
+
+/**
+ * Checks the value and path against registered schemas in the config properties
+ * and reports whether it validates against the schema. If there is no schema,
+ * this function will return true
+ * @param config The config object
+ * @param path the path where the value would go
+ * @param value The value to be checked
+ * @return true is the value conforms to the schema, or there is no schema registered
+ */
+
+gboolean
+xmms_config_value_is_valid (xmms_config_t *config, const gchar *path, xmmsv_t *value)
+{
+	const gchar *subpath;
+	xmmsv_t *schema;
+
+	subpath = strchr (path, '.') + 1;
+
+	schema = (xmmsv_t *) g_tree_lookup (config->schemas, subpath);
+
+	return xmms_schema_validate (schema, value, NULL);
+}
+
 void
 xmms_config_value_callback_set (xmmsv_t *value,
                                 const gchar *path,
@@ -829,8 +895,8 @@ xmms_config_value_callback_set (xmmsv_t *value,
 
 void
 xmms_config_value_callback_remove (xmmsv_t *value,
-                          xmms_object_handler_t cb,
-                          gpointer userdata)
+                                   xmms_object_handler_t cb,
+                                   gpointer userdata)
 {
 	xmms_config_property_t *obj;
 	if (!cb)
@@ -1313,6 +1379,7 @@ xmms_config_destroy (xmms_object_t *object)
 	g_mutex_free (config->mutex);
 
 	xmmsv_unref (config->properties_list);
+	g_tree_unref (config->schemas);
 	global_config = NULL;
 
 	xmms_config_unregister_ipc_commands ();
@@ -1372,6 +1439,8 @@ xmms_config_init (const gchar *filename)
 	config->filename = filename;
 
 	config->properties_list = xmmsv_new_dict ();
+	config->schemas = g_tree_new_full (compare_key, NULL,
+	                                   g_free, (GDestroyNotify) xmmsv_unref);
 
 	config->version = 0;
 	global_config = config;

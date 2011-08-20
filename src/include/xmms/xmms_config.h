@@ -28,8 +28,8 @@ typedef struct xmms_config_property_St xmms_config_property_t;
 xmms_config_property_t *xmms_config_lookup (const gchar *path);
 
 gchar *xmms_config_property_lookup_get_string (xmms_config_t *conf,
-                                                     const gchar *key,
-                                                     xmms_error_t *err);
+                                               const gchar *key,
+                                               xmms_error_t *err);
 gchar *xmms_config_property_get_string (const xmms_config_property_t *prop);
 gint32 xmms_config_property_get_int (const xmms_config_property_t *prop);
 gfloat xmms_config_property_get_float (const xmms_config_property_t *prop);
@@ -59,6 +59,9 @@ gboolean xmms_config_register_value (xmms_config_t *config, const gchar *path, x
 
 void xmms_config_callback_set (xmms_config_t *config, const gchar *path, xmms_object_handler_t cb, gpointer userdata);
 void xmms_config_callback_remove (xmms_config_t *config, const gchar *path, xmms_object_handler_t cb, gpointer userdata);
+
+gboolean xmms_config_register_schema (xmms_config_t *config, const gchar *path, xmmsv_t *schema);
+gboolean xmms_config_value_is_valid (xmms_config_t *config, const gchar *path, xmmsv_t *schema);
 
 G_END_DECLS
 

@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <limits.h>
 #include <string.h>
+#include "xmmsc/xmmsc_schema.h"
 #include <xmmspriv/xmms_config.h>
 #include <xmmspriv/xmms_ipc.h>
 
@@ -49,6 +50,60 @@ SETUP (config) {
 CLEANUP () {
 	xmms_object_unref (config);
 	return 0;
+}
+
+CASE (test_register_schema)
+{
+
+	xmmsv_t *lr, *volume, *jack, *schema;
+	xmmsv_t *test, *vol_value, *value;
+	const char *name;
+	gboolean ok;
+	int32_t i;
+
+	/* "jack.clientname XMMS2" "jack.volume.left 100" "jack.volume.right 100" */
+
+	lr = xmms_schema_build_dict_entry_types (
+	            xmms_schema_build_int32 ("left", "",
+	                                     100),
+	            xmms_schema_build_int32 ("right", "",
+	                                     100),
+	            NULL);
+	volume = xmms_schema_build_dict ("volume", "Level of each channel",
+	                                 lr);
+
+	jack = xmms_schema_build_dict_entry_types (
+	            xmms_schema_build_string ("clientname", "",
+	                                      "XMMS"),
+	            volume,
+	            NULL);
+	schema = xmms_schema_build_dict ("jack", "Jack IO parameters", jack);
+
+	xmms_config_register_schema (config, "jack", schema);
+
+	CU_ASSERT_TRUE (xmms_config_set_int (config, "jack.volume.left", 80));
+	CU_ASSERT_FALSE (xmms_config_set_float (config, "jack.volume.left", 60.0));
+
+	i = xmms_config_get_int (config, "jack.volume.left", &ok);
+	CU_ASSERT_TRUE (ok);
+	CU_ASSERT_EQUAL (i, 80);
+
+	vol_value = xmmsv_build_dict (XMMSV_DICT_ENTRY_INT ("left", 30),
+	                              XMMSV_DICT_ENTRY_INT ("right",50),
+	                              XMMSV_DICT_END);
+	CU_ASSERT_TRUE (xmms_config_set (config, "jack.volume", vol_value));
+	i = xmms_config_get_int (config, "jack.volume.left", &ok);
+	CU_ASSERT_TRUE (ok);
+	CU_ASSERT_EQUAL (i, 30);
+	i = xmms_config_get_int (config, "jack.volume.right", &ok);
+	CU_ASSERT_TRUE (ok);
+	CU_ASSERT_EQUAL (i, 50);
+
+	vol_value = xmmsv_build_dict (XMMSV_DICT_ENTRY_INT ("left", 30),
+	                              XMMSV_DICT_ENTRY_FLOAT ("right",50), /* wrong type */
+	                              XMMSV_DICT_END);
+
+	CU_ASSERT_FALSE (xmms_config_set (config, "jack.volume", vol_value));
 }
 
 CASE (test_register)
