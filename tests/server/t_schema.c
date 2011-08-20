@@ -103,19 +103,19 @@ CASE (test_big_schema)
 	                            XMMSV_LIST_ENTRY_STR ("Plugin3.so"),
 	                            XMMSV_LIST_END);
 	CU_ASSERT_TRUE (xmms_schema_validate (subschema, pl_list, NULL));
-	xmmsv_unref (value);
+	xmmsv_unref (pl_list);
 
 	pl_list = xmmsv_build_list (XMMSV_LIST_ENTRY_STR ("amp.so"),
 	                            XMMSV_LIST_ENTRY_STR ("wrong.so"),
 	                            XMMSV_LIST_END);
 	CU_ASSERT_FALSE (xmms_schema_validate (subschema, pl_list, NULL));
-	xmmsv_unref (value);
+	xmmsv_unref (pl_list);
 
 	pl_list = xmmsv_build_list (XMMSV_LIST_ENTRY_STR ("amp.so"),
 	                            XMMSV_LIST_ENTRY_INT (1984),
 	                            XMMSV_LIST_END);
 	CU_ASSERT_FALSE (xmms_schema_validate (subschema, pl_list, NULL));
-	xmmsv_unref (value);
+	xmmsv_unref (pl_list);
 
 	 /* test setting single parameter values inside union */
 	subschema = xmms_schema_get_subschema (ladspa, "ladspa.control.0.Param1");

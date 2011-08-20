@@ -46,10 +46,12 @@ xmms_schema_validate (xmmsv_t *schema, xmmsv_t *value, char **error_path)
 	xmmsv_t *subschema, *member, *schema_keys, *enum_ = NULL;
 
 	subschema = schema;
-	xmmsv_dict_entry_get_string (subschema, "title", &title);
-	xmmsv_dict_entry_get_int (subschema, "type", &i);
-	schema_type = (xmms_schema_type_t) i;
-	value_type = xmmsv_get_type (value);
+	if (schema) {
+		xmmsv_dict_entry_get_string (subschema, "title", &title);
+		xmmsv_dict_entry_get_int (subschema, "type", &i);
+		schema_type = (xmms_schema_type_t) i;
+		value_type = xmmsv_get_type (value);
+	}
 
 	if (!schema || schema_type == XMMS_SCHEMA_ANY) {
 		return 1;
@@ -89,7 +91,7 @@ xmms_schema_validate (xmmsv_t *schema, xmmsv_t *value, char **error_path)
 		}
 	} else { /* validate enums */
 		xmmsv_dict_get (schema, "enum", &enum_);
-		if (xmmsv_list_get_size (enum_) > 0
+		if (enum_ && xmmsv_list_get_size (enum_) > 0
 		        && !value_found_in_list (enum_, value)) {
 			return 0;
 		}
@@ -118,6 +120,9 @@ xmmsv_t *xmms_schema_get_subschema (xmmsv_t *schema, const char *path)
     while (node_name != NULL)
     {
 		subschema = child;
+		if (!subschema) {
+			return NULL;
+		}
 		xmmsv_dict_entry_get_string (subschema, "title", &subnode_name);
 		xmmsv_dict_entry_get_int (subschema, "type", &i);
 		parent_node_type = node_type;
@@ -157,6 +162,7 @@ xmmsv_t *xmms_schema_get_subschema (xmmsv_t *schema, const char *path)
 			if (strchr (remaining_path, '.') != NULL) {
 				subschema = union_schema;
 			}
+			free (remaining_path);
 			/* not sure this will work with nested unions... */
 			break;
 		default:
