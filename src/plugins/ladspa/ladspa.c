@@ -18,6 +18,7 @@
 #include "xmms/xmms_config.h"
 #include "xmms/xmms_log.h"
 #include "ladspa_plugin.h"
+#include "xmmsc/xmmsc_schema.h"
 
 #include <glib.h>
 #include <stdlib.h>
@@ -43,6 +44,8 @@ struct ladspa_data_St {
 typedef struct ladspa_data_St ladspa_data_t;
 
 #define XMMS_DEFAULT_BUFFER_SIZE 4096
+
+static void ladspa_register_schema (xmms_xform_plugin_t *xform_plugin);
 
 /* Allocate global buffers for host */
 static void xmms_ladspa_allocate_buffers (ladspa_data_t *priv);
@@ -114,8 +117,9 @@ xmms_ladspa_plugin_setup (xmms_xform_plugin_t *xform_plugin)
 	                              XMMS_SAMPLE_FORMAT_FLOAT,
 	                              XMMS_STREAM_TYPE_END);
 
-	xmms_log_info ("LADSPA Host xform setup OK.");
+	ladspa_register_schema (xform_plugin);
 
+	XMMS_DBG ("LADSPA Host xform setup OK.");
 	return TRUE;
 }
 
@@ -169,7 +173,7 @@ xmms_ladspa_init (xmms_xform_t *xform)
 
 	disconnect_param_callbacks (priv);
 	if (!ladspa_init_plugin (priv, plugin)) {
-		xmms_log_error ("Plugin init error");
+		xmms_log_error ("LADSPA Plugin init error");
 	}
 	clean_control_properties (0, plugin, priv);
 	connect_param_callbacks (priv);
@@ -326,6 +330,42 @@ process_plugin_node (ladspa_plugin_node_t *plugin_node, ladspa_data_t *priv,
 				priv->in_bufs[j][i] = priv->out_bufs[j][i];
 			}
 		}
+	}
+}
+
+static void
+ladspa_register_schema (xmms_xform_plugin_t *xform_plugin)
+{
+	GList *plugin_libs = ladspa_get_available_plugins (NULL);
+	GList *tmp;
+	xmmsv_t *pluginlib, *plugins, *ctl_dict, *enabled, *priority, *ladspa_sec, *ladspa;
+	xmmsv_t *plugin_enum;
+	gboolean ok;
+
+	plugin_enum = xmmsv_new_list ();
+
+	for (tmp = plugin_libs; tmp; tmp = g_list_next( tmp )) {
+		xmmsv_list_append (plugin_enum, xmmsv_new_string (tmp->data));
+		g_free(tmp->data);
+	}
+	g_list_free (plugin_libs);
+
+	pluginlib = xmms_schema_build_string_all ("Plugin List", "List of all available plugins", "",
+	                                          plugin_enum);
+	plugins = xmms_schema_build_list ("plugin", "List of intantiated plugins", pluginlib);
+
+	ctl_dict = xmms_schema_build_list ("control", "List containing the parameters for each instanced plugin",
+	                                   xmms_schema_build_any ("", ""));
+	enabled = xmms_schema_build_string ("enabled", "Enable or disable the plugin", "0");
+	priority = xmms_schema_build_dict ("priority", "Set priority for plugin within engine",
+	                                   xmms_schema_build_any ("", ""));
+
+	ladspa_sec = xmms_schema_build_dict_entry_types (plugins, ctl_dict, enabled, priority, NULL);
+	ladspa = xmms_schema_build_dict ("ladspa", "LADSPA Plugin host", ladspa_sec);
+
+	ok = xmms_xform_plugin_config_register_schema (xform_plugin, ladspa);
+	if (!ok) {
+		xmms_log_info ("Could not register schema.");
 	}
 }
 
@@ -592,8 +632,8 @@ ladspa_init_node (ladspa_data_t *priv,
 			}
 		}
 	}
-	xmms_log_info ("Plugin '%s'. Init OK. Mode %i",
-	               descriptor->Name, node->mode);
+	XMMS_DBG ("Plugin '%s'. Init OK. Mode %i",
+	          descriptor->Name, node->mode);
 	return;
 }
 

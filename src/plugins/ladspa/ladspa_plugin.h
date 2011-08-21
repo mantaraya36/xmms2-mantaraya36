@@ -18,6 +18,9 @@
 
 #include "ladspa.h"
 
+/* TODO set different for windows */
+#define LADSPA_DEFAULT_PATH "/usr/lib/ladspa";
+
 typedef enum {
 	LADSPA_DIRECT, /* Plugin inputs and outputs match */
 	LADSPA_MONO, /* Plugin is mono and has been instantiated for each input channel */
@@ -55,3 +58,5 @@ LADSPA_Data ladspa_plugin_get_default_value (const LADSPA_PortRangeHint * PortRa
 
 
 gint ladspa_plugin_get_index_for_parameter (ladspa_plugin_node_t *plugin, const gchar *param_name);
+
+GList *ladspa_get_available_plugins (const gchar *path);

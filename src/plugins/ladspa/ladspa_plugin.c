@@ -32,7 +32,6 @@ gint ladspa_plugin_num_ports (const LADSPA_Descriptor *descriptor,
 
 void allocate_bufs (ladspa_plugin_node_t *node, guint buf_size);
 
-
 static LADSPA_Descriptor_Function
 ladspa_plugin_get_descriptor_function (const gchar *pluginlib)
 {
@@ -42,7 +41,7 @@ ladspa_plugin_get_descriptor_function (const gchar *pluginlib)
 	gchar *libname = NULL;
 	const char * LADSPA_path;
 	gchar ** paths, **p;
-	gchar default_path[] = "/usr/lib/ladspa"; /* TODO set different for windows */
+	gchar default_path[] = LADSPA_DEFAULT_PATH;
 
 	if (strlen (pluginlib) == 0) {
 		return NULL;
@@ -159,7 +158,7 @@ ladspa_plugin_new_node (const gchar *plugin, gint num_channels, guint buf_size, 
 			                pluginlib);
 		}
 	} else {
-		xmms_log_info ("Creating empty ladspa node.");
+		XMMS_DBG ("Creating empty ladspa node.");
 	}
 
 	node = g_new0 (ladspa_plugin_node_t, 1);
@@ -369,4 +368,31 @@ ladspa_plugin_get_index_for_parameter (ladspa_plugin_node_t *plugin, const gchar
 		}
 	}
 	return -1;
+}
+
+static gint pluginlib_sorter (gconstpointer a,
+                              gconstpointer b)
+{
+   return (strcmp ((const gchar *)a, (const gchar *)b) );
+}
+
+GList *
+ladspa_get_available_plugins (const gchar *path)
+{
+	GList *file_list = NULL;
+	GDir *d;
+
+	if (path == NULL) {
+		path = LADSPA_DEFAULT_PATH;
+	}
+
+	d = g_dir_open (path, 0, NULL);
+	const gchar * files;
+	while ((files = g_dir_read_name (d)) != NULL) {
+		file_list = g_list_prepend (file_list, g_strdup (files));
+	}
+
+	file_list = g_list_sort (file_list, pluginlib_sorter);
+	g_dir_close (d);
+	return file_list;
 }
