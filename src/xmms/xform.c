@@ -1567,7 +1567,7 @@ xmms_xform_new_effect (xmms_xform_t *last, xmms_medialib_entry_t entry,
 		xmms_log_info ("Effect '%s' failed to initialize, skipping",
 		               xmms_plugin_shortname_get (plugin));
 	}
-	value = xmmsv_new_int (0);
+	value = xmmsv_new_string ("0");
 	xmms_xform_plugin_config_register_value (xform_plugin,
 	                                          "enabled", value,
 	                                          NULL, NULL);
