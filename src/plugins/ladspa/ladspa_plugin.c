@@ -157,6 +157,7 @@ ladspa_plugin_new_node (const gchar *plugin, gint num_channels, guint buf_size, 
 			xmms_log_error ("Could not find plugin %s in %s", pluginname,
 			                pluginlib);
 		}
+		g_strfreev (plugin_parts);
 	} else {
 		XMMS_DBG ("Creating empty ladspa node.");
 	}
@@ -225,10 +226,6 @@ ladspa_plugin_new_node (const gchar *plugin, gint num_channels, guint buf_size, 
 	}
 	node->num_ctl_in_ports = ctl_in_port_count;
 	allocate_bufs (node, buf_size);
-	if (pluginname) {
-		g_free (pluginname);
-	}
-	g_strfreev (plugin_parts);
 	return node;
 }
 
@@ -381,6 +378,7 @@ ladspa_get_available_plugins (const gchar *path)
 {
 	GList *file_list = NULL;
 	GDir *d;
+	gint index;
 
 	if (path == NULL) {
 		path = LADSPA_DEFAULT_PATH;
@@ -389,6 +387,20 @@ ladspa_get_available_plugins (const gchar *path)
 	d = g_dir_open (path, 0, NULL);
 	const gchar * files;
 	while ((files = g_dir_read_name (d)) != NULL) {
+		const LADSPA_Descriptor *descriptor;
+		LADSPA_Descriptor_Function df =
+		        ladspa_plugin_get_descriptor_function (files);
+		if (df) {
+			for (index = 0;; index++) {
+				descriptor = df (index);
+				if (descriptor != NULL) {
+					file_list = g_list_prepend (file_list,
+					                            g_strdup_printf ("%s:%s", files, descriptor->Label));
+				} else {
+					break;
+				}
+			}
+		}
 		file_list = g_list_prepend (file_list, g_strdup (files));
 	}
 
