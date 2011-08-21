@@ -549,7 +549,7 @@ xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmmsv_t *val
 		strncpy (last_name, path, len);
 	}
 	if (data_value && !value_is_consistent (data_value, value)) {
-		xmms_log_info ("Inconsistent value structure. Old structure replaced.");
+		XMMS_DBG ("Inconsistent value structure. Old structure replaced.");
 	}
 	new_val = xmmsv_copy (value);
 	if (xmmsv_is_type (parent_value, XMMSV_TYPE_DICT)) {
@@ -914,8 +914,6 @@ xmms_config_value_callback_remove (xmmsv_t *value,
 		xmms_object_disconnect (XMMS_OBJECT (obj),
 		                        XMMS_IPC_SIGNAL_CONFIGVALUE_CHANGED, cb, userdata);
 	}
-
-	g_return_if_fail (obj);
 }
 
 
