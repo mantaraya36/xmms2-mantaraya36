@@ -405,6 +405,16 @@ xmms_schema_build_union (const char *description, xmmsv_t *first_entry, ...)
 }
 
 xmmsv_t *
+xmms_schema_build_any (const char *title, const char *description)
+{
+	xmmsv_t *schema;
+	schema = xmmsv_build_dict (XMMSV_DICT_ENTRY_INT ("type", XMMS_SCHEMA_ANY),
+	                           XMMSV_DICT_ENTRY_STR ("desc", description),
+	                           XMMSV_DICT_END);
+	return schema;
+}
+
+xmmsv_t *
 find_by_title_in_list (xmmsv_t *list, const char *title)
 {
 	xmmsv_list_iter_t *it;

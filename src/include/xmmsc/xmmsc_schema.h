@@ -64,3 +64,4 @@ xmmsv_t *xmms_schema_build_dict (const char *title, const char *description,
 								 xmmsv_t *entry_type);
 xmmsv_t *xmms_schema_build_dict_entry_types (xmmsv_t *first_entry, ...);
 xmmsv_t *xmms_schema_build_union (const char *description, xmmsv_t *first_entry, ...);
+xmmsv_t *xmms_schema_build_any (const char *title, const char *description);

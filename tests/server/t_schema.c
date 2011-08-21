@@ -259,6 +259,57 @@ CASE (test_union)
 	xmmsv_unref (schema);
 }
 
+CASE (test_any)
+{
+	xmmsv_t *enum_, *pluginlib, *plugins, *ctl_dict, *ladspa_sec, *ladspa;
+	xmmsv_t *subschema, *value;
+
+	enum_ = xmmsv_build_list (XMMSV_LIST_ENTRY_STR ("amp.so"),
+							  XMMSV_LIST_ENTRY_STR ("other.so"),
+							  XMMSV_LIST_ENTRY_STR ("onemore.so"),
+							  XMMSV_LIST_END);
+	pluginlib = xmms_schema_build_string_all ("title (ignored in list)", "description", "",
+	                                          enum_);
+	plugins = xmms_schema_build_list ("plugin", "", pluginlib);
+
+	ctl_dict = xmms_schema_build_list ("control", "",
+	                                   xmms_schema_build_any ("", ""));
+
+	ladspa_sec = xmms_schema_build_dict_entry_types (plugins, ctl_dict, NULL);
+	ladspa = xmms_schema_build_dict ("ladspa", "LADSPA Plugin host", ladspa_sec);
+
+	subschema = xmms_schema_get_subschema (ladspa, "ladspa.plugin.0");
+
+	value = xmmsv_new_string ("notvalid.so");
+	CU_ASSERT_FALSE (xmms_schema_validate (subschema, value, NULL));
+	xmmsv_unref (value);
+	value = xmmsv_new_string ("amp.so");
+	CU_ASSERT_TRUE (xmms_schema_validate (subschema, value, NULL));
+	xmmsv_unref (value);
+
+	subschema = xmms_schema_get_subschema (ladspa, "ladspa.control");
+
+	value = xmmsv_new_string ("valid.so");
+	CU_ASSERT_FALSE (xmms_schema_validate (subschema, value, NULL));
+	xmmsv_unref (value);
+	value = xmmsv_build_list (XMMSV_LIST_ENTRY_INT (6),
+	                          XMMSV_LIST_ENTRY_STR ("hello"),
+	                          XMMSV_LIST_END);
+	CU_ASSERT_TRUE (xmms_schema_validate (subschema, value, NULL));
+	xmmsv_unref (value);
+
+	subschema = xmms_schema_get_subschema (ladspa, "ladspa.control.0");
+
+	value = xmmsv_new_string ("valid.so");
+	CU_ASSERT_TRUE (xmms_schema_validate (subschema, value, NULL));
+	xmmsv_unref (value);
+	value = xmmsv_new_int (4);
+	CU_ASSERT_TRUE (xmms_schema_validate (subschema, value, NULL));
+	xmmsv_unref (value);
+
+	xmmsv_unref (ladspa);
+}
+
 CASE (test_dicts_in_lists)
 {
 
