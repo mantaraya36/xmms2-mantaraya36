@@ -1272,14 +1272,23 @@ xmms_config_client_set_value (xmms_config_t *conf,
 			break;
 		case XMMSV_TYPE_INT32:
 			i = atoi (value);
-			xmms_config_set_int (conf, key, i);
+			if (!xmms_config_set_int (conf, key, i)) {
+				xmms_error_set (err, XMMS_ERROR_NOENT,
+				                "Could not set the value");
+			}
 			break;
 		case XMMSV_TYPE_FLOAT:
 			f = atof (value);
-			xmms_config_set_float (conf, key, f);
+			if (!xmms_config_set_float (conf, key, f)) {
+				xmms_error_set (err, XMMS_ERROR_NOENT,
+				                "Could not set the value");
+			}
 			break;
 		case XMMSV_TYPE_STRING:
-			xmms_config_set_string (conf, key, value);
+			if (!xmms_config_set_string (conf, key, value)) {
+				xmms_error_set (err, XMMS_ERROR_NOENT,
+				                "Could not set the value");
+			}
 			break;
 		default:
 			xmms_error_set (err, XMMS_ERROR_NOENT,
