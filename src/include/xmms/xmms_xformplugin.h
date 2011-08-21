@@ -311,6 +311,8 @@ xmms_config_property_t *xmms_xform_plugin_config_property_register (
 xmmsv_t *xmms_xform_plugin_config_lookup_value (xmms_xform_plugin_t *xform, const gchar *key);
 gboolean xmms_xform_plugin_config_register_value (xmms_xform_plugin_t *xform, const gchar *name, xmmsv_t *default_value, xmms_object_handler_t cb, gpointer userdata);
 
+gboolean xmms_xform_plugin_config_register_schema (xmms_xform_plugin_t *xform, xmmsv_t *schema);
+
 void xmms_xform_config_callback_set (xmms_xform_t *xform, const gchar *path, xmms_object_handler_t cb, gpointer userdata);
 void xmms_xform_config_callback_remove (xmms_xform_t *xform, const gchar *path, xmms_object_handler_t cb, gpointer userdata);
 

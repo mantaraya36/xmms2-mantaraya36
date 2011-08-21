@@ -169,6 +169,14 @@ xmms_xform_plugin_config_register_value (xmms_xform_plugin_t *xform_plugin,
 }
 
 gboolean
+xmms_xform_plugin_config_register_schema (xmms_xform_plugin_t *xform_plugin,
+                                          xmmsv_t *schema)
+{
+	xmms_plugin_t *plugin = (xmms_plugin_t *) xform_plugin;
+	return xmms_plugin_config_register_schema (plugin, schema);
+}
+
+gboolean
 xmms_xform_plugin_can_init (const xmms_xform_plugin_t *plugin)
 {
 	return !!plugin->methods.init;
