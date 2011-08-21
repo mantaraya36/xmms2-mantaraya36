@@ -453,6 +453,10 @@ xmms_config_set (xmms_config_t *config, const gchar *path, xmmsv_t *value)
 	g_free (path_root);
 
 	if (!xmms_schema_validate (subschema, value, NULL)) {
+		xmms_log_error ("Value for path: '%s' not set.\n"
+		                "Does not validate against registered schema.",
+		                path);
+		/* TODO how to notify the client this has not validated? */
 		return FALSE;
 	}
 	g_mutex_lock (config->mutex);
@@ -835,6 +839,10 @@ gboolean
 xmms_config_register_schema (xmms_config_t *config, const gchar *key, xmmsv_t *value)
 {
 	gboolean ret;
+
+	if (!config) {
+		config = global_config;
+	}
 	/* TODO make this function append schemas to existing tree allowing any path
 	  and possibily have a clear_schema function as well */
 
