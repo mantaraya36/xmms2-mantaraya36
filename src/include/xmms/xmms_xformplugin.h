@@ -318,6 +318,7 @@ void xmms_xform_config_callback_remove (xmms_xform_t *xform, const gchar *path, 
 
 xmms_config_property_t *xmms_xform_config_lookup (xmms_xform_t *xform,
                                                   const gchar *path);
+gboolean xmms_xform_config_register_value (xmms_xform_t *xform, const gchar *name, xmmsv_t *default_value, xmms_object_handler_t cb, gpointer userdata);
 xmmsv_t *xmms_xform_config_lookup_value (xmms_xform_t *xform,
                                          const gchar *path);
 gboolean xmms_xform_config_set_value (xmms_xform_t *xform, const gchar *path, xmmsv_t * value);

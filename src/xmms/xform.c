@@ -1457,6 +1457,16 @@ xmms_xform_config_lookup (xmms_xform_t *xform, const gchar *path)
 	return xmms_plugin_config_lookup ((xmms_plugin_t *) xform->plugin, path);
 }
 
+gboolean
+xmms_xform_config_register_value (xmms_xform_t *xform,
+                                  const gchar *name, xmmsv_t *default_value,
+                                  xmms_object_handler_t cb, gpointer userdata)
+{
+	g_return_val_if_fail (xform, FALSE);
+	return xmms_plugin_config_register_value ((xmms_plugin_t *) xform->plugin,
+	                                          name,default_value, cb, userdata);
+}
+
 xmmsv_t *
 xmms_xform_config_lookup_value (xmms_xform_t *xform,
                                  const gchar *path)
