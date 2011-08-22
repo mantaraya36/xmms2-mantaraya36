@@ -74,6 +74,7 @@ gboolean dict_is_consistent (xmmsv_t *config_value, xmmsv_t *value);
 gboolean config_register_path (xmms_config_t *config, const gchar *path);
 gboolean is_digit (const gchar *s);
 gboolean fill_tree_from_values (xmmsv_t *parent_node, const gchar *prefix, GTree *tree);
+void free_xmmsv_obj (xmmsv_t *node);
 static gboolean dump_node_tree (xmmsv_t *node, dump_tree_data_t *data);
 gboolean xmms_config_set_unlocked (xmms_config_t *config, const gchar *path, xmmsv_t *value);
 void xmms_config_value_callback_remove (xmmsv_t *value, xmms_object_handler_t cb, gpointer userdata);
@@ -200,11 +201,10 @@ xmms_config_lookup (const gchar *path)
 	if (prop_value) {
 		prop = (xmms_config_property_t *) xmmsv_get_obj (prop_value);
 		if (!prop) {
-			/* FIXME this leaks like mad, as API has changed and now gives out a copy instead of a reference, also from xmms_config_property_register */
 			prop = xmms_object_new (xmms_config_property_t, xmms_config_property_destroy);
 			prop->name = g_strdup (path);
 			prop->value = prop_value;
-			xmmsv_ref (prop_value);
+			xmmsv_set_obj (prop_value, prop);
 		}
 	}
 	return prop;
@@ -895,7 +895,6 @@ xmms_config_value_callback_set (xmmsv_t *value,
 		return;
 	obj = (xmms_config_property_t *) xmmsv_get_obj (value);
 	if (!obj) {
-		/* TODO this must be freed, in this file not inside xmmsv_t */
 		obj = xmms_object_new (xmms_config_property_t, xmms_config_property_destroy);
 		obj->name = g_strdup (path);
 		obj->value = value;
@@ -1354,6 +1353,50 @@ fill_tree_from_values (xmmsv_t *parent_node, const gchar *prefix, GTree *tree)
 	return TRUE;
 }
 
+void free_xmmsv_obj (xmmsv_t *parent_node)
+{
+	xmmsv_t *value;
+	const gchar *key;
+	gint i;
+	xmmsv_list_iter_t *itl;
+	xmmsv_dict_iter_t *itd;
+	xmms_object_t *obj;
+
+	obj = xmmsv_get_obj (parent_node);
+	if (obj) {
+		xmms_object_unref (obj);
+	}
+	switch (xmmsv_get_type (parent_node)) {
+	case XMMSV_TYPE_LIST:
+		xmmsv_get_list_iter (parent_node, &itl);
+		i = 0;
+		while (xmmsv_list_iter_valid (itl)) {
+			xmmsv_list_iter_entry (itl, &value);
+			free_xmmsv_obj (value);
+			xmmsv_list_iter_next (itl);
+			i++;
+		}
+		xmmsv_list_iter_explicit_destroy (itl);
+		break;
+	case XMMSV_TYPE_DICT:
+		xmmsv_get_dict_iter (parent_node, &itd);
+		while (xmmsv_dict_iter_valid (itd)) {
+			xmmsv_dict_iter_pair (itd, &key, &value);
+			free_xmmsv_obj (value);
+			xmmsv_dict_iter_next (itd);
+		}
+		xmmsv_dict_iter_explicit_destroy (itd);
+		break;
+	case XMMSV_TYPE_INT32:
+	case XMMSV_TYPE_FLOAT:
+	case XMMSV_TYPE_STRING:
+		break;
+	default:
+		xmms_log_error ("Invalid type in config");
+		break;
+	}
+}
+
 /**
  * @internal List all keys and values in the config.
  * @param conf The config
@@ -1400,6 +1443,7 @@ xmms_config_destroy (xmms_object_t *object)
 
 	g_mutex_free (config->mutex);
 
+	free_xmmsv_obj (config->properties_list);
 	xmmsv_unref (config->properties_list);
 	g_tree_unref (config->schemas);
 	global_config = NULL;
