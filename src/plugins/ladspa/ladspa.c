@@ -129,6 +129,7 @@ xmms_ladspa_plugin_setup (xmms_xform_plugin_t *xform_plugin)
 		if (!xmms_xform_plugin_config_register_schema (xform_plugin, schema)) {
 			xmms_log_info ("Could not register schema.");
 		}
+		xmmsv_unref (schema);
 	}
 	if (value) {
 		xmmsv_unref (value);
