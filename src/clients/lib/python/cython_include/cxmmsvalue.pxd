@@ -31,6 +31,7 @@ cdef extern from "xmmsc/xmmsv.h":
 		XMMSV_TYPE_NONE
 		XMMSV_TYPE_ERROR
 		XMMSV_TYPE_INT32
+		XMMSV_TYPE_FLOAT
 		XMMSV_TYPE_STRING
 		XMMSV_TYPE_COLL
 		XMMSV_TYPE_BIN
@@ -46,6 +47,7 @@ cdef extern from "xmmsc/xmmsv.h":
 	xmmsv_t *xmmsv_new_none   ()
 	xmmsv_t *xmmsv_new_error  (char *errstr)
 	xmmsv_t *xmmsv_new_int    (int i)
+	xmmsv_t *xmmsv_new_float  (float f)
 	xmmsv_t *xmmsv_new_string (char *s)
 	xmmsv_t *xmmsv_new_coll   (xmmsv_coll_t *coll)
 	xmmsv_t *xmmsv_new_bin    (unsigned char *data, unsigned int len)
@@ -66,6 +68,7 @@ cdef extern from "xmmsc/xmmsv.h":
 
 	bint xmmsv_get_error  (xmmsv_t *value, const_char **r)
 	bint xmmsv_get_int    (xmmsv_t *res, int *r)
+	bint xmmsv_get_float  (xmmsv_t *res, float *f)
 	bint xmmsv_get_string (xmmsv_t *res, const_char **r)
 	bint xmmsv_get_coll   (xmmsv_t *value, xmmsv_coll_t **coll)
 	bint xmmsv_get_bin    (xmmsv_t *res, const_uchar **r, unsigned int *rlen)
@@ -90,18 +93,22 @@ cdef extern from "xmmsc/xmmsv.h":
 
 	bint xmmsv_list_get_string (xmmsv_t *v, int pos, const_char **val)
 	bint xmmsv_list_get_int    (xmmsv_t *v, int pos, int *val)
+	bint xmmsv_list_get_float  (xmmsv_t *v, int pos, float *val)
 	bint xmmsv_list_get_coll   (xmmsv_t *v, int pos, xmmsv_coll_t **val)
 
 	bint xmmsv_list_set_string (xmmsv_t *v, int pos, const_char *val)
 	bint xmmsv_list_set_int    (xmmsv_t *v, int pos, int val)
+	bint xmmsv_list_set_float  (xmmsv_t *v, int pos, float val)
 	bint xmmsv_list_set_coll   (xmmsv_t *v, int pos, xmmsv_coll_t *val)
 
 	bint xmmsv_list_insert_string (xmmsv_t *v, int pos, const_char *val)
 	bint xmmsv_list_insert_int    (xmmsv_t *v, int pos, int val)
+	bint xmmsv_list_insert_float  (xmmsv_t *v, int pos, float val)
 	bint xmmsv_list_insert_coll   (xmmsv_t *v, int pos, xmmsv_coll_t *val)
 
 	bint xmmsv_list_append_string (xmmsv_t *v, const_char *val)
 	bint xmmsv_list_append_int    (xmmsv_t *v, int val)
+	bint xmmsv_list_append_float  (xmmsv_t *v, float val)
 	bint xmmsv_list_append_coll   (xmmsv_t *v, xmmsv_coll_t *val)
 
 	bint     xmmsv_list_iter_entry (xmmsv_list_iter_t *it, xmmsv_t **val)
@@ -119,10 +126,12 @@ cdef extern from "xmmsc/xmmsv.h":
 
 	bint xmmsv_list_iter_entry_string (xmmsv_list_iter_t *v, const_char **valval)
 	bint xmmsv_list_iter_entry_int    (xmmsv_list_iter_t *v, int *val)
+	bint xmmsv_list_iter_entry_float  (xmmsv_list_iter_t *v, float *val)
 	bint xmmsv_list_iter_entry_coll   (xmmsv_list_iter_t *v, xmmsv_coll_t **val)
 
 	bint xmmsv_list_iter_insert_string (xmmsv_list_iter_t *v, const_char *val)
 	bint xmmsv_list_iter_insert_int    (xmmsv_list_iter_t *v, int val)
+	bint xmmsv_list_iter_insert_float  (xmmsv_list_iter_t *v, float val)
 	bint xmmsv_list_iter_insert_coll   (xmmsv_list_iter_t *v, xmmsv_coll_t *val)
 
 	xmmsv_t *xmmsv_list_flatten (xmmsv_t *list, int depth)
@@ -138,10 +147,12 @@ cdef extern from "xmmsc/xmmsv.h":
 
 	bint xmmsv_dict_entry_get_string (xmmsv_t *val, const_char *key, const_char **r)
 	bint xmmsv_dict_entry_get_int    (xmmsv_t *val, const_char *key, int *r)
+	bint xmmsv_dict_entry_get_float    (xmmsv_t *val, const_char *key, float *r)
 	bint xmmsv_dict_entry_get_coll   (xmmsv_t *val, const_char *key, xmmsv_coll_t **coll)
 
 	bint xmmsv_dict_set_string (xmmsv_t *val, const_char *key, const_char *el)
 	bint xmmsv_dict_set_int    (xmmsv_t *val, const_char *key, int el)
+	bint xmmsv_dict_set_float  (xmmsv_t *val, const_char *key, float el)
 	bint xmmsv_dict_set_coll   (xmmsv_t *val, const_char *key, xmmsv_coll_t *el)
 
 	bint xmmsv_dict_iter_pair  (xmmsv_dict_iter_t *it, const_char **key, xmmsv_t **val)
@@ -155,10 +166,12 @@ cdef extern from "xmmsc/xmmsv.h":
 
 	bint xmmsv_dict_iter_pair_string (xmmsv_dict_iter_t *it, const_char **key, const_char **val)
 	bint xmmsv_dict_iter_pair_int    (xmmsv_dict_iter_t *it, const_char **key, int *val)
+	bint xmmsv_dict_iter_pair_float  (xmmsv_dict_iter_t *it, const_char **key, float *val)
 	bint xmmsv_dict_iter_pair_coll   (xmmsv_dict_iter_t *it, const_char **key, xmmsv_coll_t **val)
 
 	bint xmmsv_dict_iter_set_string (xmmsv_dict_iter_t *it, const_char *el)
 	bint xmmsv_dict_iter_set_int    (xmmsv_dict_iter_t *it, int el)
+	bint xmmsv_dict_iter_set_float  (xmmsv_dict_iter_t *it, float el)
 	bint xmmsv_dict_iter_set_coll   (xmmsv_dict_iter_t *it, xmmsv_coll_t *el)
 
 

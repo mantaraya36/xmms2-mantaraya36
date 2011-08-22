@@ -10,6 +10,7 @@ from cxmmsvalue cimport *
 VALUE_TYPE_NONE   = XMMSV_TYPE_NONE
 VALUE_TYPE_ERROR  = XMMSV_TYPE_ERROR
 VALUE_TYPE_INT32  = XMMSV_TYPE_INT32
+VALUE_TYPE_FLOAT  = XMMSV_TYPE_FLOAT
 VALUE_TYPE_STRING = XMMSV_TYPE_STRING
 VALUE_TYPE_COLL   = XMMSV_TYPE_COLL
 VALUE_TYPE_BIN    = XMMSV_TYPE_BIN
@@ -41,6 +42,8 @@ cdef xmmsv_t *create_native_value(value) except NULL:
 		ret = xmmsv_new_none()
 	elif isinstance(value, int):
 		ret = xmmsv_new_int(value)
+	elif isinstance(value, float):
+		ret = xmmsv_new_float(value)
 	elif isinstance(value, (unicode, str)):
 		s = from_unicode(value)
 		ret = xmmsv_new_string(s)
@@ -140,6 +143,16 @@ cdef class XmmsValue:
 		"""
 		cdef int ret = 0
 		if not xmmsv_get_int(self.val, &ret):
+			raise ValueError("Failed to retrieve value")
+		return ret
+
+	cpdef get_float(self):
+		"""
+		Get data from the result structure as an float.
+		@rtype: int
+		"""
+		cdef float ret = 0
+		if not xmmsv_get_float(self.val, &ret):
 			raise ValueError("Failed to retrieve value")
 		return ret
 
@@ -249,6 +262,8 @@ cdef class XmmsValue:
 			return self.get_error()
 		elif vtype == XMMSV_TYPE_INT32:
 			return self.get_int()
+		elif vtype == XMMSV_TYPE_FLOAT:
+			return self.get_float()
 		elif vtype == XMMSV_TYPE_STRING:
 			return self.get_string()
 		elif vtype == XMMSV_TYPE_COLL:
