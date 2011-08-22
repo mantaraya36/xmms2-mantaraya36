@@ -106,6 +106,7 @@ xmms_ladspa_plugin_setup (xmms_xform_plugin_t *xform_plugin)
 	value = xmmsv_new_dict ();
 	xmms_xform_plugin_config_register_value (xform_plugin, "control.0", value,
 	                                         NULL, NULL);
+	xmmsv_unref (value);
 
 	xmms_xform_plugin_indata_add (xform_plugin,
 	                              XMMS_STREAM_TYPE_MIMETYPE,
@@ -363,7 +364,9 @@ ladspa_register_schema (xmms_xform_plugin_t *xform_plugin)
 	plugin_enum = xmmsv_new_list ();
 
 	for (tmp = plugin_libs; tmp; tmp = g_list_next( tmp )) {
-		xmmsv_list_append (plugin_enum, xmmsv_new_string (tmp->data));
+		xmmsv_t *s = xmmsv_new_string (tmp->data);
+		xmmsv_list_append (plugin_enum, s);
+		xmmsv_unref (s);
 		g_free(tmp->data);
 	}
 
