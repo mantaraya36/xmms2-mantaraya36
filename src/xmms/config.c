@@ -839,6 +839,7 @@ gboolean
 xmms_config_register_schema (xmms_config_t *config, const gchar *key, xmmsv_t *value)
 {
 	gboolean ret;
+	xmmsv_t *old_schema;
 
 	if (!config) {
 		config = global_config;
@@ -852,6 +853,10 @@ xmms_config_register_schema (xmms_config_t *config, const gchar *key, xmmsv_t *v
 	}
 
 	ret = TRUE;
+	old_schema = (xmmsv_t *) g_tree_lookup (config->schemas, key);
+	if (old_schema) {
+		g_tree_remove (config->schemas, key);
+	}
 	g_tree_insert (config->schemas, strdup (key), (gpointer) value);
 	return ret;
 }
