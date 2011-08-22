@@ -24,7 +24,8 @@
 #include "ladspa_plugin.h"
 
 
-static LADSPA_Descriptor_Function ladspa_plugin_get_descriptor_function (const gchar* pluginlib);
+static LADSPA_Descriptor_Function ladspa_plugin_get_descriptor_function (const gchar* pluginlib, GModule **out_dl);
+gchar *find_full_libname (const gchar *pluginlib);
 static const LADSPA_Descriptor *ladspa_plugin_get_descriptor (gchar *pluginlib,
                                                               gchar *pluginname);
 gint ladspa_plugin_num_ports (const LADSPA_Descriptor *descriptor,
@@ -33,19 +34,44 @@ gint ladspa_plugin_num_ports (const LADSPA_Descriptor *descriptor,
 void allocate_bufs (ladspa_plugin_node_t *node, guint buf_size);
 
 static LADSPA_Descriptor_Function
-ladspa_plugin_get_descriptor_function (const gchar *pluginlib)
+ladspa_plugin_get_descriptor_function (const gchar *pluginlib, GModule **out_dl)
 {
 	GModule *dl;
 	LADSPA_Descriptor_Function desc;
-	gboolean exists = FALSE;
 	gchar *libname = NULL;
-	const char * LADSPA_path;
-	gchar ** paths, **p;
-	gchar default_path[] = LADSPA_DEFAULT_PATH;
 
 	if (strlen (pluginlib) == 0) {
 		return NULL;
 	}
+	libname = find_full_libname (pluginlib);
+	if (!libname) {
+		xmms_log_error ("Couldn't find library %s", pluginlib);
+		return NULL;
+	}
+	dl = g_module_open (libname, G_MODULE_BIND_LAZY);
+	g_free (libname);
+	if (out_dl) {
+		*out_dl = dl;
+	}
+	if (dl == NULL) {
+		xmms_log_error ("Couldn't open library %s", pluginlib);
+		return NULL;
+	}
+	g_module_symbol (dl, "ladspa_descriptor", (gpointer *)&desc);
+	if (!desc) {
+		g_module_close (dl);
+	}
+	return desc;
+}
+
+gchar *find_full_libname (const gchar *pluginlib)
+{
+	const char * LADSPA_path;
+	gchar ** paths, **p;
+	gchar *libname = NULL;
+	gchar default_path[] = LADSPA_DEFAULT_PATH;
+	gboolean exists = FALSE;
+
 	if (pluginlib[0] == '/') { /* absolute path */
 		libname = g_strdup (pluginlib);
 	} else { /* relative path */
@@ -80,20 +106,8 @@ ladspa_plugin_get_descriptor_function (const gchar *pluginlib)
 		}
 		g_strfreev (paths);
 	}
-	if (!libname) {
-		xmms_log_error ("Couldn't find library %s", pluginlib);
-		return NULL;
-	}
-	dl = g_module_open (libname, G_MODULE_BIND_LAZY);
-	g_free (libname);
-	if (dl == NULL) {
-		xmms_log_error ("Couldn't open library %s", pluginlib);
-		return NULL;
-	}
-	g_module_symbol (dl, "ladspa_descriptor", (gpointer *)&desc);
-	return desc;
+	return libname;
 }
-
 
 static const LADSPA_Descriptor *
 ladspa_plugin_get_descriptor (gchar *pluginlib, gchar *pluginname)
@@ -101,7 +115,7 @@ ladspa_plugin_get_descriptor (gchar *pluginlib, gchar *pluginname)
 	LADSPA_Descriptor_Function descriptor_function;
 	const LADSPA_Descriptor *descriptor;
 	gint index, plugin_count;
-	descriptor_function = ladspa_plugin_get_descriptor_function (pluginlib);
+	descriptor_function = ladspa_plugin_get_descriptor_function (pluginlib, NULL);
 	if (descriptor_function == NULL) {
 		xmms_log_error ("Could not find descriptor function in library %s", pluginlib);
 		return NULL;
@@ -355,6 +369,10 @@ ladspa_plugin_get_index_for_parameter (ladspa_plugin_node_t *plugin, const gchar
 	g_return_val_if_fail (plugin, -1);
 	g_return_val_if_fail (param_name, -1);
 
+	if (!descriptor) { /* will happen for empty nodes */
+		return -1;
+	}
+
 	for (i = 0; i < descriptor->PortCount; i++) {
 		if (LADSPA_IS_PORT_CONTROL (descriptor->PortDescriptors[i])
 		        || LADSPA_IS_PORT_INPUT (descriptor->PortDescriptors[i])) {
@@ -387,9 +405,10 @@ ladspa_get_available_plugins (const gchar *path)
 	d = g_dir_open (path, 0, NULL);
 	const gchar * files;
 	while ((files = g_dir_read_name (d)) != NULL) {
+		GModule *out_dl;
 		const LADSPA_Descriptor *descriptor;
 		LADSPA_Descriptor_Function df =
-		        ladspa_plugin_get_descriptor_function (files);
+		        ladspa_plugin_get_descriptor_function (files, &out_dl);
 		if (df) {
 			for (index = 0;; index++) {
 				descriptor = df (index);
@@ -400,6 +419,7 @@ ladspa_get_available_plugins (const gchar *path)
 					break;
 				}
 			}
+			g_module_close (out_dl);
 		}
 		file_list = g_list_prepend (file_list, g_strdup (files));
 	}
